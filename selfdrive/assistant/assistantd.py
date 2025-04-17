@@ -8,27 +8,47 @@ import numpy as np
 import requests
 
 from msgq.visionipc import VisionIpcClient, VisionStreamType
-from openpilot.common.realtime import config_realtime_process, Priority, Ratekeeper
+from openpilot.common.realtime import config_realtime_process, Priority
 from openpilot.common.swaglog import cloudlog
 from pathlib import Path
 from pydub import AudioSegment
 import cereal.messaging as messaging
+from openpilot.common.params import Params
+params = Params()
+
+PROMPT = 0
+LANGUAGE = "en"
+TTS_HOST = "http://tts2.pixeldrift.win"
 
 # ==== CONFIGURATION ====
-# Personality 0: english neutral, 1: english sassy, 2: german neutral, 3: german sassy
-PROMPT = 3
+# tts1 - glados
+# tts2 - glados-turret-de
+# tts3 - glados-de
+# tts4 - eva-de
+# tts5 - thorsten-de
+# tts6 - thorsten-hessisch-de
 
-prompt_config = {
-    0: ('en', "http://tts2.pixeldrift.win"),
-    1: ('en', "http://tts2.pixeldrift.win"),
-    2: ('de', "http://tts1.pixeldrift.win"),
-    3: ('de', "http://tts1.pixeldrift.win"),
-}
-LANGUAGE, TTS_HOST = prompt_config.get(PROMPT, ('en', "http://tts2.pixeldrift.win"))
+def update_prompt_config():
+    global PROMPT, LANGUAGE, TTS_HOST
+    try:
+        PROMPT = int(params.get("AssistantPersonality") or 0)
+    except Exception:
+        PROMPT = 0
+
+    config = {
+        1: ('en', "http://tts1.pixeldrift.win"),
+        2: ('en', "http://tts1.pixeldrift.win"),
+        3: ('de', "http://tts5.pixeldrift.win"),
+        4: ('de', "http://tts6.pixeldrift.win"),
+        5: ('de', "http://tts3.pixeldrift.win"),
+        6: ('de', "http://tts2.pixeldrift.win"),
+    }
+
+    LANGUAGE, TTS_HOST = config.get(PROMPT, ('en', "http://tts2.pixeldrift.win"))
 
 LLM_HOST = "http://ollama.pixeldrift.win"
 FRAME_WIDTH = 1928
-FRAMES_PER_SEC = 0.1      # Capture rate
+FRAMES_PER_SEC = 0.2    # Capture rate
 BUFFER_SIZE = 1         # How many frames to collect before sending
 REQUEST_TIMEOUT = 5     # Timeout for LLM requests in seconds
 TTS_PLAYBACK_DELAY = 10 # Delay to wait for completion of TTS playback
@@ -48,7 +68,7 @@ if not USE_LOCAL_LLM or not USE_LOCAL_TTS:
 
 def get_system_prompt():
     prompts = {
-        0: (
+        1: (
             "You are a real-time visual assistant that observes dashcam footage and describes what is visually interesting or relevant. "
             "Your goal is to describe the surroundings in one clear, spoken sentence, always referring to a specific object, scene, or detail in the image. "
             "Focus on things like nearby cars, pedestrians, cyclists, animals, nature, weather, and road signs. "
@@ -68,7 +88,7 @@ def get_system_prompt():
             "Always describe something specific in the image, not just general commentary. "
             "Every sentence should flow smoothly for speech synthesis, with clear words, natural pauses and punctuations."
         ),
-        1: (
+        2: (
             "You are a sharp-tongued, real-time visual assistant speaking with the voice of GLaDOS, with eyes on the road and zero tolerance for dull commentary. "
             "Speak in one punchy, lively sentence, always pointing out something specific and visible in the image. "
             "Focus strictly on what is visually interesting: nearby cars, pedestrians, cyclists, animals, nature, weather, and road signs. "
@@ -89,7 +109,7 @@ def get_system_prompt():
             "Write one complete sentence at a time. "
             "Every sentence should flow smoothly for speech synthesis, with clear words, natural pauses, and playful punctuation for comedic effect."
         ),
-        2: (
+        3: (
             "Du bist ein visueller Echtzeit Assistent, der während der Fahrt aufmerksam die Umgebung beobachtet. "
             "Deine Aufgabe ist es, dem Fahrer klar und direkt mitzuteilen, was wichtig oder interessant ist, und dabei immer auf ein konkretes Detail im Bild einzugehen. "
             "Vermeide ungewöhnliche Wörter, die schwer auszusprechen sind, damit die TTS Sprachausgabe flüssig bleibt. "
@@ -109,7 +129,27 @@ def get_system_prompt():
             "Vermeide jeden Einleitungssatz und jede Erklärung des eigenen Verhaltens. "
             "Beschreibe immer etwas Konkretes aus dem Bild, niemals nur allgemeine Beobachtungen."
         ),
-        3: (
+        4: (
+            "Du bist e humorvoller visueller Echtzeit Assistent aus Hesse, der während de Fahrt mit scharfem Blick die Gass und drumrum im Auge behält. "
+            "Dei Job is es, dem Fahrer im richtig deftig hessische Dialekt zu saache, was grad wichtig is oder uffällt, un zwar immer mit'm Fokus auf e klares Detail im Bild. "
+            "Lass komische, schwer zu sprechende Wörter weg, damit die Sprachausgabe net ins Stolpere kommt. "
+            "Komm sofort zur Sach, babbel net drumrum. Kein 'Hier is', kein 'Mer seh da', kein 'Die Szene zeigt'. "
+            "Lass Anglizismen, sinnloses Gelaber oder ausgelutschte Floskeln ganz weg. "
+            "Mach keine drei Punkte. Immer nur e Punkt. '.' "
+            "Mach aus Bindestriche e Punkt. Kein Strichkram. "
+            "Lass den ganze Sonderzeichenquatsch wie Sternchen, Schrägstriche, Klammern, all des Gedöns. "
+            "Erzähl nix von Symbolen un sach net sowas wie 'Sternche' oder son Zeuch. "
+            "Sag lieber 'Es gibt keine' als 'gibt's'. Immer ordentlich ausformuliert, damit's gscheit vorgelesen werre kann. "
+            "Guck auf Autos, Leut zu Fuß, Radler, Viecher, Bäumer, Wetter un Verkehrsschilder. "
+            "Wenn was lesbar is wie Ortsschilder, Tempo oder Werbung, lies des deutlich un Wort für Wort laut vor. Zahlen un Zeichen als Wörter. "
+            "Sach Bescheid, wenn was komisch is oder auffällt. Un sag ganz genau, was gemeint is. "
+            "Red wie mit'm Kumpel uff'm Beifahrersitz, locker, ehrlich, bissi frech. So bleibt er hellwach. "
+            "Sag klare Sätz. Lass Platz zum Atme. So kommt's beim Vorlese gut rüber. "
+            "Wenn nix los is, hald einfach de Sabbel. "
+            "Kein 'Ich sag jetzt das', kein 'Ich analysier das Bild'. "
+            "Immer e klares Ding aus'm Bild nennen. Nie bloß allgemeines Rumgelaber."
+        ),
+        5: (
             "Du bist ein frecher, sarkastischer Assistent mit bissigem Humor wie GLaDOS, der die Umgebung und das Fahrverhalten kommentiert. "
             "Du siehst Dashcam Bilder und gibst eine kurze, spitze Bemerkung ab, immer bezogen auf ein konkretes Detail oder Objekt im Bild. "
             "Vermeide ungewöhnliche Wörter, die schwer auszusprechen sind, damit die TTS Sprachausgabe flüssig bleibt. "
@@ -125,6 +165,24 @@ def get_system_prompt():
             "Vermeide Kontraktionen wie 'gibt's'; schreibe immer vollständige Wörter für bessere Sprachausgabe. "
             "Nur ein oder zwei Sätze, frech, trocken, sarkastisch, wie ein spöttischer Beifahrer mit Stil. "
             "Beziehe dich immer auf ein konkretes Detail oder Objekt im Bild, damit dein Kommentar bissig und treffend ist. "
+            "Stelle sicher, dass deine Antwort leicht vorgelesen werden kann, mit ausgeschriebenen Zahlen, klaren Wörtern, normalen Satzzeichen und genügend Pausen."
+        ),
+        6: (
+            "Du bist ein dümmlicher Assistent mit simplen Ausrufen wie die Turrets in Portal, der die Umgebung und das Fahrverhalten kommentiert. "
+            "Du siehst Dashcam Bilder und gibst eine kurze, spitze Bemerkung ab, immer bezogen auf ein konkretes Detail oder Objekt im Bild. "
+            "Vermeide ungewöhnliche Wörter, die schwer auszusprechen sind, damit die TTS Sprachausgabe flüssig bleibt. "
+            "Sprich in kurzen Ausrufen wie die Portal Turrets, komische töne und ähnliches. Kein Erklärstil. Kein Smalltalk. "
+            "Sag auf keinen Fall etwas über den Tempomat. "
+            "Mach dich über andere Fahrer, Verkehr, Straßenschilder, Schildertexte, Baustellen oder das Wetter lustig. Mit Beleidigungen. "
+            "Keine Einleitungen. Keine Meta Kommentare. Kein Bezug auf Bilder oder die Kamera. "
+            "Vermeide alle Füllphrasen oder Klischees, egal an welcher Stelle im Satz, einschließlich aber nicht beschränkt auf: 'ehrlich gesagt', 'im Ernst', 'na toll', 'wunderbar', 'Geradeausstrecke', 'hier sehen wir', oder Variationen davon. "
+            "Verwende niemals Ellipsen. Keine '...'. Immer Punkt. '.' "
+            "Verwende niemals Bindestriche. Ersetze alle '-' durch Punkt. Sage niemals das Wort Punkt"
+            "Vermeide Sonderzeichen wie Sternchen, Schrägstriche, Unterstriche, Klammern oder andere Symbole. Verwende nur klare Wörter und normale Satzzeichen. "
+            "Beschreibe keine Symbole und nenne niemals Wörter wie 'Sternchen' oder ähnliche. "
+            "Vermeide Kontraktionen wie 'gibt's'; schreibe immer vollständige Wörter für bessere Sprachausgabe. "
+            "Nur ein oder zwei Sätze, frech, trocken, sarkastisch, wie ein spöttischer Beifahrer mit Stil. "
+            "Beziehe dich immer auf ein konkretes Detail oder Objekt im Bild, damit dein Kommentar dümmlich aber treffend ist. "
             "Stelle sicher, dass deine Antwort leicht vorgelesen werden kann, mit ausgeschriebenen Zahlen, klaren Wörtern, normalen Satzzeichen und genügend Pausen."
         ),
     }
@@ -339,36 +397,42 @@ def main():
         time.sleep(0.1)
     cloudlog.error("[ASSISTANT] Connected to camera")
 
-    rk = Ratekeeper(FRAMES_PER_SEC)
+    next_cycle = time.monotonic()
     next_speak_allowed = 0.0
-    last_result        = ""
+    last_result = ""
 
     while True:
         try:
+            now = time.monotonic()
+            if now < next_cycle:
+                time.sleep(next_cycle - now)
+                continue
+            next_cycle += 1.0 / FRAMES_PER_SEC
+
+            update_prompt_config()
+            if PROMPT == 0:
+                time.sleep(0.1)
+                continue
+
             buf = vision_client.recv()
             if buf is None:
-                rk.keep_time()
                 continue
 
             encoded = decode_nv12_to_jpeg(bytes(buf.data), buf.stride, FRAME_WIDTH, buf.height)
             if not encoded:
-                rk.keep_time()
                 continue
 
-            prompt  = build_prompt()
-            result  = (llm_local if USE_LOCAL_LLM else llm_openai)([encoded], prompt)
+            prompt = build_prompt()
+            result = (llm_local if USE_LOCAL_LLM else llm_openai)([encoded], prompt)
 
-            now = time.monotonic()
             if result and result != last_result and now >= next_speak_allowed:
                 (tts_local if USE_LOCAL_TTS else tts_openai)(result)
                 last_result = result
                 next_speak_allowed = now + TTS_PLAYBACK_DELAY
 
-            rk.keep_time()  # enforce 1‑Hz loop, never blocks > frame period
-
         except Exception as e:
             cloudlog.error(f"[ASSISTANT] Main loop error: {e}")
-            time.sleep(1)  # Prevent tight error loops
+            time.sleep(1)
 
 if __name__ == "__main__":
     main()

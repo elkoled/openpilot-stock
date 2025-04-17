@@ -63,6 +63,21 @@ TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
     },
   };
 
+  std::vector<QString> assistant_button_texts{"0", "1", "2", "3", "4", "5", "6"};
+  assistant_personality_setting = new ButtonParamControl(
+    "AssistantPersonality",
+    tr("Assist Personality"),
+    tr("Select the voice assistant's personality and language<br><br>"
+      "<b>0</b>: Disabled<br>"
+      "<b>1</b>: English - GLaDOS Neutral<br>"
+      "<b>2</b>: English - GLaDOS Sassy<br>"
+      "<b>3</b>: German - Thorsten Neutral<br>"
+      "<b>4</b>: German - Thorsten Hessisch<br>"
+      "<b>5</b>: German - GLaDOS Sassy<br>"
+      "<b>6</b>: German - Portal Turret"),
+    "../assets/offroad/icon_metric.png",
+    assistant_button_texts
+  );
 
   std::vector<QString> longi_button_texts{tr("Aggressive"), tr("Standard"), tr("Relaxed")};
   long_personality_setting = new ButtonParamControl("LongitudinalPersonality", tr("Driving Personality"),
@@ -87,6 +102,7 @@ TogglesPanel::TogglesPanel(SettingsWindow *parent) : ListWidget(parent) {
     // insert longitudinal personality after NDOG toggle
     if (param == "DisengageOnAccelerator") {
       addItem(long_personality_setting);
+      addItem(assistant_personality_setting);
     }
   }
 
@@ -326,7 +342,7 @@ void SettingsWindow::setCurrentPanel(int index, const QString &param) {
     if (param.endsWith("Panel")) {
       QString panelName = param;
       panelName.chop(5); // Remove "Panel" suffix
-      
+
       // Find the panel by name
       for (int i = 0; i < nav_btns->buttons().size(); i++) {
         if (nav_btns->buttons()[i]->text() == tr(panelName.toStdString().c_str())) {
@@ -338,7 +354,7 @@ void SettingsWindow::setCurrentPanel(int index, const QString &param) {
       emit expandToggleDescription(param);
     }
   }
-  
+
   panel_widget->setCurrentIndex(index);
   nav_btns->buttons()[index]->setChecked(true);
 }

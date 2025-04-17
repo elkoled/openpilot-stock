@@ -10,6 +10,7 @@ inline static std::unordered_map<std::string, uint32_t> keys = {
     {"ApiCache_Device", PERSISTENT},
     {"ApiCache_FirehoseStats", PERSISTENT},
     {"AssistNowToken", PERSISTENT},
+    {"AssistantPersonality", PERSISTENT},
     {"AthenadPid", PERSISTENT},
     {"AthenadUploadQueue", PERSISTENT},
     {"AthenadRecentlyViewedRoutes", PERSISTENT},
