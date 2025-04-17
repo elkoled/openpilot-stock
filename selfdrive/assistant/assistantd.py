@@ -8,7 +8,7 @@ import numpy as np
 import requests
 
 from msgq.visionipc import VisionIpcClient, VisionStreamType
-from openpilot.common.realtime import config_realtime_process
+from openpilot.common.realtime import config_realtime_process, Priority, Ratekeeper
 from openpilot.common.swaglog import cloudlog
 from pathlib import Path
 from pydub import AudioSegment
@@ -28,13 +28,15 @@ LANGUAGE, TTS_HOST = prompt_config.get(PROMPT, ('en', "http://tts2.pixeldrift.wi
 
 LLM_HOST = "http://ollama.pixeldrift.win"
 FRAME_WIDTH = 1928
-FRAMES_PER_SEC = 1      # Capture rate
+FRAMES_PER_SEC = 0.1      # Capture rate
 BUFFER_SIZE = 1         # How many frames to collect before sending
 REQUEST_TIMEOUT = 5     # Timeout for LLM requests in seconds
 TTS_PLAYBACK_DELAY = 10 # Delay to wait for completion of TTS playback
 USE_LOCAL_LLM = True
 USE_LOCAL_TTS = True
 LOCAL_LLM_MODEL = 'gemma3:27b'
+
+sm_carstate = messaging.SubMaster(['carState'])
 
 os.environ["OLLAMA_HOST"] = LLM_HOST
 from ollama import chat
@@ -131,39 +133,36 @@ def get_system_prompt():
 
 def get_vehicle_telemetry():
     """Get current vehicle telemetry data"""
-    sm = messaging.SubMaster(['carState'])
-    start = time.monotonic()
-    while not sm.updated['carState']:
-        sm.update(100)
-        if time.monotonic() - start > 1.0:
-            return ""
+    sm_carstate.update(0)
+    if not sm_carstate.updated['carState']:
+        return ""
 
-    cs = sm['carState']
-    speed_kph = round(cs.vEgoCluster * 3.6) if cs.vEgoCluster is not None else 0
-    acceleration = round(cs.aEgo, 2) if cs.aEgo is not None else 0
-    steering_angle = round(cs.steeringAngleDeg, 1)
-    cruise_enabled = cs.cruiseState.enabled
-    cruise_speed = round(cs.cruiseState.speed * 3.6) if cs.cruiseState.speed is not None else 0
-    standstill = cs.standstill
+    cs = sm_carstate['carState']
+    speed_kph       = round(cs.vEgoCluster * 3.6) if cs.vEgoCluster is not None else 0
+    acceleration    = round(cs.aEgo, 2)           if cs.aEgo        is not None else 0
+    steering_angle  = round(cs.steeringAngleDeg,1)
+    cruise_enabled  = cs.cruiseState.enabled
+    cruise_speed    = round(cs.cruiseState.speed * 3.6) if cs.cruiseState.speed is not None else 0
+    standstill      = cs.standstill
 
-    t = {
-        "en": {
-            "motion": "The vehicle is stationary." if standstill else f"The vehicle is moving at {speed_kph} km/h",
-            "acc": f"Acceleration: {acceleration} m/s²",
-            "steer": f"Steering angle: {steering_angle}°",
-            "cruise": f"Cruise control active at {cruise_speed} km/h." if cruise_enabled else "",
-            "cam": f"{BUFFER_SIZE} dashcam frame(s) captured at {FRAMES_PER_SEC} FPS.",
-        },
-        "de": {
-            "motion": "Das Fahrzeug steht." if standstill else f"Das Fahrzeug fährt {speed_kph} km/h",
-            "acc": f"Beschleunigung: {acceleration} m/s²",
-            "steer": f"Lenkwinkel: {steering_angle}°",
-            "cruise": f"Tempomat aktiv bei {cruise_speed} km/h." if cruise_enabled else "",
-            "cam": f"{BUFFER_SIZE} Dashcam-Bild(er) aufgenommen mit {FRAMES_PER_SEC} FPS.",
-        }
+    text = {
+        "en": (
+            ("The vehicle is stationary." if standstill else f"The vehicle is moving at {speed_kph} km/h"),
+            f"Acceleration: {acceleration} m/s²",
+            f"Steering angle: {steering_angle}°",
+            f"Cruise control active at {cruise_speed} km/h." if cruise_enabled else "",
+            f"{BUFFER_SIZE} dashcam frame(s) captured at {FRAMES_PER_SEC} FPS."
+        ),
+        "de": (
+            ("Das Fahrzeug steht." if standstill else f"Das Fahrzeug fährt {speed_kph} km/h"),
+            f"Beschleunigung: {acceleration} m/s²",
+            f"Lenkwinkel: {steering_angle}°",
+            f"Tempomat aktiv bei {cruise_speed} km/h." if cruise_enabled else "",
+            f"{BUFFER_SIZE} Dashcam Bild(er) aufgenommen mit {FRAMES_PER_SEC} FPS."
+        ),
     }[LANGUAGE]
 
-    return f"{t['motion']}, {t['acc']}, {t['steer']}. {t['cruise']} {t['cam']}"
+    return ", ".join([t for t in text if t])
 
 def build_prompt():
     return f"{get_system_prompt()} {get_vehicle_telemetry()}"
@@ -324,57 +323,48 @@ def save_audio(audio_bytes, is_mp3=True, output_path=Path("/tmp/play.wav")):
     try:
         audio = AudioSegment.from_file(BytesIO(audio_bytes), format="mp3" if is_mp3 else "wav")
         audio = audio.set_frame_rate(48000).set_channels(1).set_sample_width(2)
-        audio.export(output_path, format="wav")
+
+        tmp = output_path.with_suffix(".tmp")
+        audio.export(tmp, format="wav")
+        tmp.replace(output_path)   # atomic rename
+
         cloudlog.error("[ASSISTANT] Audio saved to WAV.")
     except Exception as e:
         cloudlog.error(f"[ASSISTANT] Audio conversion failed: {e}")
 
 def main():
-    config_realtime_process([0, 1, 2, 3], priority=5)
+    config_realtime_process(5, Priority.CTRL_LOW)
     vision_client = VisionIpcClient("camerad", VisionStreamType.VISION_STREAM_ROAD, True)
-
-    # Wait for camera connection
     while not vision_client.connect(False):
         time.sleep(0.1)
-
     cloudlog.error("[ASSISTANT] Connected to camera")
 
-    last_result = ""
-    capture_interval = 1.0 / FRAMES_PER_SEC
+    rk = Ratekeeper(FRAMES_PER_SEC)
+    next_speak_allowed = 0.0
+    last_result        = ""
 
     while True:
         try:
-            # Capture frame
             buf = vision_client.recv()
             if buf is None:
-                time.sleep(0.05)
+                rk.keep_time()
                 continue
 
-            buf_data = bytes(buf.data)
-            encoded = decode_nv12_to_jpeg(buf_data, buf.stride, FRAME_WIDTH, buf.height)
+            encoded = decode_nv12_to_jpeg(bytes(buf.data), buf.stride, FRAME_WIDTH, buf.height)
             if not encoded:
+                rk.keep_time()
                 continue
 
-            cloudlog.error("[ASSISTANT] Frame captured and processed")
+            prompt  = build_prompt()
+            result  = (llm_local if USE_LOCAL_LLM else llm_openai)([encoded], prompt)
 
-            # Build prompt and process frame
-            prompt = build_prompt()
-            llm_func = llm_local if USE_LOCAL_LLM else llm_openai
-            result = llm_func([encoded], prompt)
-
-            if not result or result == last_result:
-                cloudlog.error("[ASSISTANT] Empty or duplicate result, skipping TTS")
-            else:
-                cloudlog.error(f"[ASSISTANT] Result: {result}")
-                tts_func = tts_local if USE_LOCAL_TTS else tts_openai
-                tts_func(result)
+            now = time.monotonic()
+            if result and result != last_result and now >= next_speak_allowed:
+                (tts_local if USE_LOCAL_TTS else tts_openai)(result)
                 last_result = result
+                next_speak_allowed = now + TTS_PLAYBACK_DELAY
 
-                # Wait after speaking to avoid overwhelming playback
-                time.sleep(TTS_PLAYBACK_DELAY)
-
-            # Wait for the next capture
-            time.sleep(capture_interval)
+            rk.keep_time()  # enforce 1‑Hz loop, never blocks > frame period
 
         except Exception as e:
             cloudlog.error(f"[ASSISTANT] Main loop error: {e}")
