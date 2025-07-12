@@ -68,7 +68,7 @@ class MetaDriveBridge(SimulatorBridge):
     config = dict(
       use_render=self.should_render,
       vehicle_config=dict(
-        enable_reverse=False,
+        enable_reverse=True,
         render_vehicle=False,
         image_source="rgb_road",
       ),
