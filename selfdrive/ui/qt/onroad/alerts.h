@@ -3,14 +3,19 @@
 #include <QWidget>
 
 #include "selfdrive/ui/ui.h"
-#include "selfdrive/ui/qt/onroad/wificam.h"
+#include "selfdrive/ui/qt/onroad/mjpeg_stream.h"
 #include "common/params.h"
 
 class OnroadAlerts : public QWidget {
   Q_OBJECT
 
 public:
-  OnroadAlerts(QWidget *parent = 0) : QWidget(parent) {}
+  OnroadAlerts(QWidget *parent = 0) : QWidget(parent) {
+    // Set up the callback for frame updates
+    rear_cam.setFrameCallback([this]() {
+      QMetaObject::invokeMethod(this, "update", Qt::QueuedConnection);
+    });
+  }
   void updateState(const UIState &s);
   void clear();
 
@@ -38,6 +43,6 @@ protected:
 
   QColor bg;
   Alert alert = {};
-  WifiCam rear_cam;
+  MjpegStream rear_cam;
   bool rear_cam_running = false;
 };

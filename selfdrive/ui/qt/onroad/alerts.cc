@@ -15,9 +15,9 @@ void OnroadAlerts::updateState(const UIState &s) {
 
     if (alert.text1 == "Reverse\nGear") {
       Params p;
-      QString url = "https://upload.wikimedia.org/wikipedia/commons/3/3f/Fronalpstock_big.jpg";
+      QString url = "http://24.134.3.9/axis-cgi/mjpg/video.cgi"; //MJPEG Stream URL
       if (!url.isEmpty()) {
-        qWarning() << "[Alerts] Starting rear cam stream from:" << url;
+        qWarning() << "[Alerts] Starting rear cam MJPEG stream from:" << url;
         rear_cam.start(url);
         rear_cam_running = true;
       } else {
@@ -111,11 +111,18 @@ void OnroadAlerts::paintEvent(QPaintEvent *event) {
 
   if (alert.text1 == "Reverse\nGear" && rear_cam_running) {
     if (rear_cam.hasFrame()) {
-      QPixmap frame = rear_cam.frame().scaled(r.size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
-      p.drawPixmap(r, frame);
-      qWarning() << "[Alerts] Drawing rear cam frame";
+      // Get the frame and scale it to fit properly
+      QPixmap frame = rear_cam.frame();
+
+      // Scale to fit the rectangle while maintaining aspect ratio
+      QPixmap scaled_frame = frame.scaled(r.size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+
+      // Center the scaled frame in the rectangle
+      int x = r.x() + (r.width() - scaled_frame.width()) / 2;
+      int y = r.y() + (r.height() - scaled_frame.height()) / 2;
+
+      p.drawPixmap(x, y, scaled_frame);
     } else {
-      qWarning() << "[Alerts] Rear cam has no frame yet";
       p.setFont(InterFont(64));
       p.setPen(QColor(255, 255, 255));
       p.drawText(r, Qt::AlignCenter, "Loading rear camera...");
