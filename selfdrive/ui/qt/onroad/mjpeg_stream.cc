@@ -13,13 +13,12 @@ MjpegStream::MjpegStream(QObject *parent)
 MjpegStream::~MjpegStream() {
   stop();
 }
-
 void MjpegStream::start(const QString &url) {
   if (active) {
     stop();
   }
 
-  qDebug() << "[MjpegStream] Starting stream from:" << url;
+  qWarning() << "[MjpegStream] Requesting stream from:" << url;
 
   active = true;
   boundary_found = false;
@@ -33,6 +32,15 @@ void MjpegStream::start(const QString &url) {
   request.setRawHeader("Connection", "keep-alive");
 
   reply = nam->get(request);
+
+  connect(reply, &QNetworkReply::metaDataChanged, this, [this]() {
+    qWarning() << "[MjpegStream] Headers received:";
+    const auto headers = reply->rawHeaderPairs();
+    for (const auto &h : headers) {
+      qWarning() << " " << h.first << ":" << h.second;
+    }
+  });
+
   connect(reply, &QNetworkReply::readyRead, this, &MjpegStream::onReadyRead);
   connect(reply, &QNetworkReply::finished, this, &MjpegStream::onFinished);
   connect(reply, QOverload<QNetworkReply::NetworkError>::of(&QNetworkReply::error),
@@ -42,7 +50,7 @@ void MjpegStream::start(const QString &url) {
 void MjpegStream::stop() {
   if (!active) return;
 
-  qDebug() << "[MjpegStream] Stopping stream";
+  qWarning() << "[MjpegStream] Stopping stream";
   active = false;
 
   if (reply) {
@@ -60,67 +68,67 @@ void MjpegStream::stop() {
 void MjpegStream::onReadyRead() {
   if (!reply || !active) return;
 
-  QByteArray data = reply->readAll();
-  buffer.append(data);
+  buffer.append(reply->readAll());
 
-  // Extract boundary from content-type header if not found yet
   if (!boundary_found) {
     QString contentType = reply->header(QNetworkRequest::ContentTypeHeader).toString();
     QRegularExpression re("boundary=([^;\\s]+)");
     QRegularExpressionMatch match = re.match(contentType);
     if (match.hasMatch()) {
-      boundary = ("--" + match.captured(1)).toUtf8();
-      boundary_found = true;
-      qDebug() << "[MjpegStream] Found boundary:" << boundary;
+      boundary = "--" + match.captured(1).trimmed().toUtf8();
+    } else {
+      boundary = "--boundarydonotcross";  // fallback for mjpg-streamer
     }
+    boundary_found = true;
+    qWarning() << "[MjpegStream] Using boundary:" << boundary;
   }
+  qWarning() << "[MjpegStream] onReadyRead(), buffer size now:" << buffer.size();
 
-  if (boundary_found) {
-    processBuffer();
-  }
+  processBuffer();
 }
-
 void MjpegStream::processBuffer() {
   while (true) {
-    if (reading_headers) {
-      // Look for boundary
-      int boundary_pos = buffer.indexOf(boundary);
-      if (boundary_pos == -1) break;
-
-      // Remove everything before boundary
-      buffer = buffer.mid(boundary_pos + boundary.length());
-
-      // Look for end of headers (double CRLF)
-      int header_end = buffer.indexOf("\r\n\r\n");
-      if (header_end == -1) break;
-
-      // Extract headers
-      QByteArray headers = buffer.left(header_end);
-      buffer = buffer.mid(header_end + 4);
-
-      // Parse Content-Length
-      QRegularExpression re("Content-Length:\\s*(\\d+)", QRegularExpression::CaseInsensitiveOption);
-      QRegularExpressionMatch match = re.match(QString::fromUtf8(headers));
-      if (match.hasMatch()) {
-        content_length = match.captured(1).toInt();
-        reading_headers = false;
-      } else {
-        qWarning() << "[MjpegStream] No Content-Length found in headers";
-        continue;
-      }
-    } else {
-      // Reading frame data
-      if (buffer.length() < content_length) break;
-
-      // Extract frame
-      QByteArray frame_data = buffer.left(content_length);
-      buffer = buffer.mid(content_length);
-
-      extractFrame(frame_data);
-      reading_headers = true;
+    if (!boundary_found) {
+      qWarning() << "[MjpegStream] Boundary not found yet.";
+      return;
     }
+
+    int start = buffer.indexOf(boundary);
+    if (start == -1) {
+      qWarning() << "[MjpegStream] No starting boundary found.";
+      return;
+    }
+
+    int next = buffer.indexOf(boundary, start + boundary.size());
+    if (next == -1) {
+      qWarning() << "[MjpegStream] No next boundary found yet. Waiting for more data.";
+      return;
+    }
+
+    QByteArray part = buffer.mid(start + boundary.size(), next - (start + boundary.size()));
+    buffer = buffer.mid(next);  // trim used data
+
+    // Remove leading \r\n
+    if (part.startsWith("\r\n")) part = part.mid(2);
+
+    int header_end = part.indexOf("\r\n\r\n");
+    if (header_end == -1) {
+      qWarning() << "[MjpegStream] Incomplete part headers.";
+      continue;
+    }
+
+    QByteArray headers = part.left(header_end);
+    QByteArray frame_data = part.mid(header_end + 4);
+
+    qWarning() << "[MjpegStream] Got headers:\n" << headers;
+    qWarning() << "[MjpegStream] Got frame of size:" << frame_data.size();
+
+    extractFrame(frame_data);
   }
 }
+
+
+
 
 void MjpegStream::extractFrame(const QByteArray &frame_data) {
   if (!active) return;
@@ -128,16 +136,17 @@ void MjpegStream::extractFrame(const QByteArray &frame_data) {
   QPixmap new_frame;
   if (new_frame.loadFromData(frame_data, "JPEG")) {
     current_frame = new_frame;
-    if (frame_callback) {
-      frame_callback();
-    }
+    if (frame_callback) frame_callback();
+    qWarning() << "[MjpegStream] Frame OK, size:" << frame_data.size();
   } else {
-    qWarning() << "[MjpegStream] Failed to load JPEG frame, data size:" << frame_data.size();
+    qWarning() << "[MjpegStream] Failed to decode JPEG, size:" << frame_data.size();
   }
 }
 
+
+
 void MjpegStream::onFinished() {
-  qDebug() << "[MjpegStream] Stream finished";
+  qWarning() << "[MjpegStream] Stream finished";
   if (active) {
     // Try to reconnect after a short delay
     QTimer::singleShot(1000, this, [this]() {

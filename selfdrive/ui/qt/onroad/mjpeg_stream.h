@@ -29,8 +29,10 @@ private slots:
   void onFinished();
   void onError(QNetworkReply::NetworkError error);
 
-private:
+private Q_SLOTS:
   void processBuffer();
+
+private:
   void extractFrame(const QByteArray &frame_data);
 
   QNetworkAccessManager *nam;

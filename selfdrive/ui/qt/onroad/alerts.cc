@@ -15,7 +15,7 @@ void OnroadAlerts::updateState(const UIState &s) {
 
     if (alert.text1 == "Reverse\nGear") {
       Params p;
-      QString url = "http://24.134.3.9/axis-cgi/mjpg/video.cgi"; //MJPEG Stream URL
+      QString url = "http://localhost:8080/?action=stream"; //MJPEG Stream URL
       if (!url.isEmpty()) {
         qWarning() << "[Alerts] Starting rear cam MJPEG stream from:" << url;
         rear_cam.start(url);
