@@ -3,6 +3,8 @@
 #include <QWidget>
 
 #include "selfdrive/ui/ui.h"
+#include "selfdrive/ui/qt/onroad/wificam.h"
+#include "common/params.h"
 
 class OnroadAlerts : public QWidget {
   Q_OBJECT
@@ -36,4 +38,6 @@ protected:
 
   QColor bg;
   Alert alert = {};
+  WifiCam rear_cam;
+  bool rear_cam_running = false;
 };
