@@ -11,23 +11,18 @@ void OnroadAlerts::updateState(const UIState &s) {
   bool new_alert = !alert.equal(a);
   if (new_alert) {
     alert = a;
-    qWarning() << "[Alerts] New alert:" << alert.text1;
 
+    // rear camera logic
     if (alert.text1 == "Reverse\nGear") {
-      Params p;
-      QString url = "http://localhost:8080/?action=stream"; //MJPEG Stream URL
-      if (!url.isEmpty()) {
-        qWarning() << "[Alerts] Starting rear cam MJPEG stream from:" << url;
-        rear_cam.start(url);
+      if (!rear_cam_running) {
+        rear_cam.start("http://localhost:8080/?action=stream");
         rear_cam_running = true;
-      } else {
-        qWarning() << "[Alerts] URL is empty, not starting stream";
       }
     } else if (rear_cam_running) {
-      qWarning() << "[Alerts] Stopping rear cam stream";
       rear_cam.stop();
       rear_cam_running = false;
     }
+
     update();
   }
 }
@@ -111,16 +106,10 @@ void OnroadAlerts::paintEvent(QPaintEvent *event) {
 
   if (alert.text1 == "Reverse\nGear" && rear_cam_running) {
     if (rear_cam.hasFrame()) {
-      // Get the frame and scale it to fit properly
       QPixmap frame = rear_cam.frame();
-
-      // Scale to fit the rectangle while maintaining aspect ratio
       QPixmap scaled_frame = frame.scaled(r.size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
-
-      // Center the scaled frame in the rectangle
       int x = r.x() + (r.width() - scaled_frame.width()) / 2;
       int y = r.y() + (r.height() - scaled_frame.height()) / 2;
-
       p.drawPixmap(x, y, scaled_frame);
     } else {
       p.setFont(InterFont(64));
