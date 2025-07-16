@@ -19,13 +19,14 @@ from openpilot.common.filter_simple import FirstOrderFilter
 from openpilot.common.params import Params
 from openpilot.common.realtime import DT_HW
 from openpilot.selfdrive.selfdrived.alertmanager import set_offroad_alert
-from openpilot.system.hardware import HARDWARE, TICI, AGNOS
+from openpilot.system.hardware import HARDWARE, TICI, AGNOS, PC
 from openpilot.system.loggerd.config import get_available_percent
 from openpilot.system.statsd import statlog
 from openpilot.common.swaglog import cloudlog
 from openpilot.system.hardware.power_monitoring import PowerMonitoring
 from openpilot.system.hardware.fan_controller import TiciFanController
 from openpilot.system.version import terms_version, training_version
+from openpilot.system.athena.registration import UNREGISTERED_DONGLE_ID
 
 ThermalStatus = log.DeviceState.ThermalStatus
 NetworkType = log.DeviceState.NetworkType
@@ -34,6 +35,7 @@ CURRENT_TAU = 15.   # 15s time constant
 TEMP_TAU = 5.   # 5s time constant
 DISCONNECT_TIMEOUT = 5.  # wait 5 seconds before going offroad after disconnect so you get an alert
 PANDA_STATES_TIMEOUT = round(1000 / SERVICE_LIST['pandaStates'].frequency * 1.5)  # 1.5x the expected pandaState frequency
+ONROAD_CYCLE_TIME = 1  # seconds to wait offroad after requesting an onroad cycle
 
 ThermalBand = namedtuple("ThermalBand", ['min_temp', 'max_temp'])
 HardwareState = namedtuple("HardwareState", ['network_type', 'network_info', 'network_strength', 'network_stats',
@@ -170,6 +172,7 @@ def hardware_thread(end_event, hw_queue) -> None:
 
   onroad_conditions: dict[str, bool] = {
     "ignition": False,
+    "not_onroad_cycle": True,
   }
   startup_conditions: dict[str, bool] = {}
   startup_conditions_prev: dict[str, bool] = {}
@@ -195,6 +198,7 @@ def hardware_thread(end_event, hw_queue) -> None:
   should_start_prev = False
   in_car = False
   engaged_prev = False
+  offroad_cycle_count = 0
 
   params = Params()
   power_monitor = PowerMonitoring()
@@ -210,6 +214,12 @@ def hardware_thread(end_event, hw_queue) -> None:
     pandaStates = sm['pandaStates']
     peripheralState = sm['peripheralState']
     peripheral_panda_present = peripheralState.pandaType != log.PandaState.PandaType.unknown
+
+    # handle requests to cycle system started state
+    if params.get_bool("OnroadCycleRequested"):
+      params.put_bool("OnroadCycleRequested", False)
+      offroad_cycle_count = sm.frame
+    onroad_conditions["not_onroad_cycle"] = (sm.frame - offroad_cycle_count) >= ONROAD_CYCLE_TIME * SERVICE_LIST['pandaStates'].frequency
 
     if sm.updated['pandaStates'] and len(pandaStates) > 0:
 
@@ -231,7 +241,7 @@ def hardware_thread(end_event, hw_queue) -> None:
         cloudlog.error("panda timed out onroad")
 
     # Run at 2Hz, plus either edge of ignition
-    ign_edge = (started_ts is not None) != onroad_conditions["ignition"]
+    ign_edge = (started_ts is not None) != all(onroad_conditions.values())
     if (sm.frame % round(SERVICE_LIST['pandaStates'].frequency * DT_HW) != 0) and not ign_edge:
       continue
 
@@ -315,6 +325,12 @@ def hardware_thread(end_event, hw_queue) -> None:
     extra_text = f"{offroad_comp_temp:.1f}C"
     show_alert = (not onroad_conditions["device_temp_good"] or not startup_conditions["device_temp_engageable"]) and onroad_conditions["ignition"]
     set_offroad_alert_if_changed("Offroad_TemperatureTooHigh", show_alert, extra_text=extra_text)
+
+    # *** registration check ***
+    if not PC:
+      # we enforce this for our software, but you are welcome
+      # to make a different decision in your software
+      startup_conditions["registered_device"] = PC or (params.get("DongleId") != UNREGISTERED_DONGLE_ID)
 
     # TODO: this should move to TICI.initialize_hardware, but we currently can't import params there
     if TICI and HARDWARE.get_device_type() == "tici":

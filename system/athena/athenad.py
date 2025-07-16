@@ -22,6 +22,7 @@ from typing import cast
 from collections.abc import Callable
 
 import requests
+from requests.adapters import HTTPAdapter, DEFAULT_POOLBLOCK
 from jsonrpc import JSONRPCResponseManager, dispatcher
 from websocket import (ABNF, WebSocket, WebSocketException, WebSocketTimeoutException,
                        create_connection)
@@ -55,12 +56,28 @@ WS_FRAME_SIZE = 4096
 DEVICE_STATE_UPDATE_INTERVAL = 1.0  # in seconds
 DEFAULT_UPLOAD_PRIORITY = 99  # higher number = lower priority
 
+# https://bytesolutions.com/dscp-tos-cos-precedence-conversion-chart,
+# https://en.wikipedia.org/wiki/Differentiated_services
+UPLOAD_TOS = 0x20  # CS1, low priority background traffic
+SSH_TOS = 0x90  # AF42, DSCP of 36/HDD_LINUX_AC_VI with the minimum delay flag
+
 NetworkType = log.DeviceState.NetworkType
 
 UploadFileDict = dict[str, str | int | float | bool]
 UploadItemDict = dict[str, str | bool | int | float | dict[str, str]]
 
 UploadFilesToUrlResponse = dict[str, int | list[UploadItemDict] | list[str]]
+
+
+class UploadTOSAdapter(HTTPAdapter):
+  def init_poolmanager(self, connections, maxsize, block=DEFAULT_POOLBLOCK, **pool_kwargs):
+    pool_kwargs["socket_options"] = [(socket.IPPROTO_IP, socket.IP_TOS, UPLOAD_TOS)]
+    super().init_poolmanager(connections, maxsize, block, **pool_kwargs)
+
+
+UPLOAD_SESS = requests.Session()
+UPLOAD_SESS.mount("http://", UploadTOSAdapter())
+UPLOAD_SESS.mount("https://", UploadTOSAdapter())
 
 
 @dataclass
@@ -309,10 +326,10 @@ def _do_upload(upload_item: UploadItem, callback: Callable = None) -> requests.R
   stream = None
   try:
     stream, content_length = get_upload_stream(path, compress)
-    response = requests.put(upload_item.url,
-                            data=CallbackReader(stream, callback, content_length) if callback else stream,
-                            headers={**upload_item.headers, 'Content-Length': str(content_length)},
-                            timeout=30)
+    response = UPLOAD_SESS.put(upload_item.url,
+                               data=CallbackReader(stream, callback, content_length) if callback else stream,
+                               headers={**upload_item.headers, 'Content-Length': str(content_length)},
+                               timeout=30)
     return response
   finally:
     if stream:
@@ -482,8 +499,7 @@ def startLocalProxy(global_end_event: threading.Event, remote_ws_uri: str, local
                            enable_multithread=True)
 
     # Set TOS to keep connection responsive while under load.
-    # DSCP of 36/HDD_LINUX_AC_VI with the minimum delay flag
-    ws.sock.setsockopt(socket.IPPROTO_IP, socket.IP_TOS, 0x90)
+    ws.sock.setsockopt(socket.IPPROTO_IP, socket.IP_TOS, SSH_TOS)
 
     ssock, csock = socket.socketpair()
     local_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -546,7 +562,7 @@ def getNetworks():
 
 @dispatcher.add_method
 def takeSnapshot() -> str | dict[str, str] | None:
-  from openpilot.system.camerad.snapshot.snapshot import jpeg_write, snapshot
+  from openpilot.system.camerad.snapshot import jpeg_write, snapshot
   ret = snapshot()
   if ret is not None:
     def b64jpeg(x):
@@ -776,8 +792,11 @@ def ws_manage(ws: WebSocket, end_event: threading.Event) -> None:
         # While not sending data, onroad, we can expect to time out in 7 + (7 * 2) = 21s
         #                         offroad, we can expect to time out in 30 + (10 * 3) = 60s
         # FIXME: TCP_USER_TIMEOUT is effectively 2x for some reason (32s), so it's mostly unused
-        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_USER_TIMEOUT, 16000 if onroad else 0)
-        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 7 if onroad else 30)
+        if sys.platform == 'linux':
+          sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_USER_TIMEOUT, 16000 if onroad else 0)
+          sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 7 if onroad else 30)
+        elif sys.platform == 'darwin':
+          sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPALIVE, 7 if onroad else 30)
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 7 if onroad else 10)
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 2 if onroad else 3)
 
