@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import bz2
+import concurrent.futures
 from functools import partial
 import multiprocessing
 import capnp
@@ -266,8 +267,9 @@ class LogReader:
     return self.__lrs[i]
 
   def __iter__(self):
-    for i in range(len(self.logreader_identifiers)):
-      yield from self._get_lr(i)
+    with concurrent.futures.ThreadPoolExecutor() as pool:
+      for lr in pool.map(self._get_lr, range(len(self.logreader_identifiers))):
+        yield from lr
 
   def _run_on_segment(self, func, i):
     return func(self._get_lr(i))
