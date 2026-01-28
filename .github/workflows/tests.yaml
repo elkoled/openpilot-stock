@@ -291,3 +291,52 @@ jobs:
         with:
           name: mici-raylib-report-${{ inputs.run_number || '1' }}-${{ github.event_name == 'push' && github.ref == 'refs/heads/master' && 'master' || github.event.number }}
           path: selfdrive/ui/tests/diff/report
+
+  driving_diff:
+    name: driving diff
+    runs-on: ${{
+      (github.repository == 'commaai/openpilot') &&
+      ((github.event_name != 'pull_request') ||
+      (github.event.pull_request.head.repo.full_name == 'commaai/openpilot'))
+      && fromJSON('["namespace-profile-amd64-8x16", "namespace-experiments:docker.builds.local-cache=separate"]')
+      || fromJSON('["ubuntu-24.04"]') }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+    - uses: ./.github/workflows/setup-with-retry
+    - name: Build openpilot
+      run: ${{ env.RUN }} "scons -j$(nproc)"
+    - name: Test driving diff
+      if: github.event_name == 'pull_request'
+      run: |
+        ${{ env.RUN }} "PYTHONWARNINGS=default python tools/car_porting/driving_diff.py | tee driving_diff.txt"
+    - name: Upload diff
+      if: always() && github.event_name == 'pull_request'
+      uses: actions/upload-artifact@v4
+      with:
+        name: driving_diff_${{ github.event.number }}
+        path: driving_diff.txt
+    - name: Update refs
+      if: github.repository == 'commaai/openpilot' && github.ref == 'refs/heads/master'
+      run: ${{ env.RUN }} "python tools/car_porting/driving_diff.py --update-refs"
+    - name: Checkout ci-artifacts
+      if: github.repository == 'commaai/openpilot' && github.ref == 'refs/heads/master'
+      uses: actions/checkout@v4
+      with:
+        repository: commaai/ci-artifacts
+        ssh-key: ${{ secrets.CI_ARTIFACTS_DEPLOY_KEY }}
+        path: ${{ github.workspace }}/ci-artifacts
+    - name: Push refs
+      if: github.repository == 'commaai/openpilot' && github.ref == 'refs/heads/master'
+      working-directory: ${{ github.workspace }}/ci-artifacts
+      run: |
+        ls ${{ github.workspace }}/driving_diff/*.zst 2>/dev/null || exit 0
+        git config user.name "GitHub Actions Bot"
+        git config user.email "<>"
+        git fetch origin driving_diff || true
+        git checkout driving_diff 2>/dev/null || git checkout --orphan driving_diff
+        cp ${{ github.workspace }}/driving_diff/*.zst .
+        git add *.zst
+        git commit -m "driving_diff refs for ${{ github.sha }}" || echo "No changes to commit"
+        git push origin driving_diff
