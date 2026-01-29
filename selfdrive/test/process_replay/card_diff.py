@@ -13,6 +13,11 @@ from openpilot.selfdrive.test.process_replay.process_replay import (
 CARD_CFG = get_process_config("card")
 
 
+def run_card(route):
+  lr = list(LogReader(route))
+  return replay_process(CARD_CFG, lr)
+
+
 def main():
   parser = argparse.ArgumentParser()
   parser.add_argument("route")
@@ -20,12 +25,11 @@ def main():
   args = parser.parse_args()
 
   print(f"Replaying: {args.route}")
-  lr = list(LogReader(args.route))
-  result = replay_process(CARD_CFG, lr)
-  print(f"Got {len(result)} msgs: {dict(Counter(m.which() for m in result))}")
+  new = run_card(args.route)
+  print(f"Got {len(new)} msgs: {dict(Counter(m.which() for m in new))}")
 
   if args.save:
-    Path(args.save).write_bytes(pickle.dumps(result))
+    Path(args.save).write_bytes(pickle.dumps(new))
     print(f"Saved: {args.save}")
 
 
