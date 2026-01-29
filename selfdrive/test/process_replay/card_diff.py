@@ -12,7 +12,7 @@ from openpilot.selfdrive.test.process_replay.process_replay import (
 from openpilot.selfdrive.test.process_replay.compare_logs import (
   compare_logs, format_process_diff,
 )
-from opendbc.car.tests.car_diff import dict_diff, IGNORE_FIELDS, TOLERANCE
+from opendbc.car.tests.car_diff import dict_diff, format_diff, IGNORE_FIELDS, TOLERANCE
 
 CARD_CFG = get_process_config("card")
 
@@ -66,6 +66,8 @@ def main():
 
   for field, fd in sorted(by_field.items()):
     print(f"  {field} ({len(fd)} diffs)")
+    for line in format_diff(fd, ref_states, new_states, field):
+      print(line)
 
   return 1
 
