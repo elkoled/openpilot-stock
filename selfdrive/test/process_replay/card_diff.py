@@ -10,7 +10,7 @@ from openpilot.selfdrive.test.process_replay.process_replay import (
   replay_process, get_process_config,
 )
 from openpilot.selfdrive.test.process_replay.compare_logs import (
-  compare_logs,
+  compare_logs, format_process_diff,
 )
 
 CARD_CFG = get_process_config("card")
@@ -49,7 +49,10 @@ def main():
     print("PASS: no diffs")
     return 0
 
-  print(f"\n{len(diffs)} diffs")
+  diff, _ = format_process_diff(diffs)
+  print(f"\n{len(diffs)} diffs:")
+  print(diff)
+
   return 1
 
 
