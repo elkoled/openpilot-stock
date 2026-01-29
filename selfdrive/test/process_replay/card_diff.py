@@ -21,6 +21,7 @@ def run_card(route):
 def main():
   parser = argparse.ArgumentParser()
   parser.add_argument("route")
+  parser.add_argument("--ref", help="Reference route or .pkl file")
   parser.add_argument("--save", help="Save to .pkl")
   args = parser.parse_args()
 
@@ -31,7 +32,17 @@ def main():
   if args.save:
     Path(args.save).write_bytes(pickle.dumps(new))
     print(f"Saved: {args.save}")
+    return 0
+
+  if not args.ref:
+    print("Use --ref to compare or --save to save")
+    return 0
+
+  ref = pickle.loads(Path(args.ref).read_bytes()) if args.ref.endswith(".pkl") else run_card(args.ref)
+  print(f"Ref: {len(ref)} msgs")
+
+  return 0
 
 
 if __name__ == "__main__":
-  main()
+  sys.exit(main())
