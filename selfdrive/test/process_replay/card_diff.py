@@ -7,7 +7,7 @@ from pathlib import Path
 
 from openpilot.tools.lib.logreader import LogReader
 from openpilot.selfdrive.test.process_replay.process_replay import (
-  replay_process, get_process_config,
+  replay_process, get_process_config, check_openpilot_enabled,
 )
 from openpilot.selfdrive.test.process_replay.compare_logs import (
   compare_logs, format_process_diff,
@@ -18,6 +18,8 @@ CARD_CFG = get_process_config("card")
 
 def run_card(route):
   lr = list(LogReader(route))
+  if not check_openpilot_enabled(lr):
+    print(f"Warning: {route} never engaged")
   return replay_process(CARD_CFG, lr)
 
 
