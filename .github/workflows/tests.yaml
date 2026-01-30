@@ -204,19 +204,19 @@ jobs:
         name: process_replay_diff.txt
         path: selfdrive/test/process_replay/diff.txt
     - name: Update refs
-      if: github.repository == 'elkoled/openpilot-stock' && github.ref == 'refs/heads/master'
+      if: always() && github.repository == 'elkoled/openpilot-stock'
       run: |
         ${{ env.RUN }} "selfdrive/test/process_replay/test_processes.py -j$(nproc) --update-refs && \
                         chmod -R 777 /tmp/comma_download_cache"
     - name: Checkout ci-artifacts
-      if: github.repository == 'elkoled/openpilot-stock' && github.ref == 'refs/heads/master'
+      if: always() && github.repository == 'elkoled/openpilot-stock'
       uses: actions/checkout@v4
       with:
         repository: elkoled/ci-artifacts
         ssh-key: ${{ secrets.CI_ARTIFACTS_DEPLOY_KEY }}
         path: ${{ github.workspace }}/ci-artifacts
     - name: Push refs
-      if: github.repository == 'elkoled/openpilot-stock' && github.ref == 'refs/heads/master'
+      if: always() && github.repository == 'elkoled/openpilot-stock'
       working-directory: ${{ github.workspace }}/ci-artifacts
       run: |
         git checkout --orphan process-replay
