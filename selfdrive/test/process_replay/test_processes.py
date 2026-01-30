@@ -201,7 +201,7 @@ if __name__ == "__main__":
           ref_log_path = get_url(*segment.rsplit("--", 1,), "rlog.zst")
         else:
           ref_log_fn = os.path.join(FAKEDATA, f"{segment}_{cfg.proc_name}_{ref_commit}.zst")
-          ref_log_path = ref_log_fn if os.path.exists(ref_log_fn) else BASE_URL + os.path.basename(ref_log_fn)
+          ref_log_path = ref_log_fn if os.path.exists(ref_log_fn) else BASE_URL + os.path.basename(ref_log_fn).replace("|", "%7C")
 
         dat = None if args.upload_only else log_data[segment]
         pool_args.append((segment, cfg, args, cur_log_fn, ref_log_path, dat))
@@ -223,8 +223,8 @@ if __name__ == "__main__":
 
     if failed:
       print("TEST FAILED")
-      print("\n\nTo update the reference logs for this commit run:")
-      print("./test_processes.py --update-refs")
+      print("\n\nTo push the new reference logs for this commit run:")
+      print("./test_processes.py --upload-only")
     else:
       print("TEST SUCCEEDED")
 
