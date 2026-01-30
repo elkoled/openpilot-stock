@@ -56,13 +56,13 @@ def main():
   print(f"\n{len(diffs)} diffs:")
   print(diff)
 
-  ref_states = [m.carState for m in ref if m.which() == "carState"]
+  ref_states = [(m.logMonoTime, m.carState) for m in ref if m.which() == "carState"]
   new_states = [m.carState for m in new if m.which() == "carState"]
 
   by_field = defaultdict(list)
-  for i, (r, n) in enumerate(zip(ref_states, new_states)):
+  for i, ((ts, r), n) in enumerate(zip(ref_states, new_states)):
     for d in dict_diff(r.to_dict(), n.to_dict(), ignore=IGNORE_FIELDS, tolerance=TOLERANCE):
-      by_field[d[1]].append((d[1], i, d[2], i))
+      by_field[d[1]].append((d[1], i, d[2], ts))
 
   for field, fd in sorted(by_field.items()):
     print(f"  {field} ({len(fd)} diffs)")
