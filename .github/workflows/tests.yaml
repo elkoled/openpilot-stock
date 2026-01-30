@@ -219,15 +219,14 @@ jobs:
       if: github.repository == 'elkoled/openpilot-stock' && github.ref == 'refs/heads/master'
       working-directory: ${{ github.workspace }}/ci-artifacts
       run: |
-        ls ${{ github.workspace }}/selfdrive/test/process_replay/fakedata/*.zst 2>/dev/null || exit 0
+        git checkout --orphan process-replay
+        git rm -rf *
         git config user.name "GitHub Actions Bot"
         git config user.email "<>"
-        git fetch origin process-replay || true
-        git checkout process-replay 2>/dev/null || git checkout --orphan process-replay
         cp ${{ github.workspace }}/selfdrive/test/process_replay/fakedata/*.zst .
-        git add *.zst
-        git commit -m "process-replay refs for ${{ github.sha }}" || echo "No changes to commit"
-        git push origin process-replay
+        git add .
+        git commit -m "process-replay refs for ${{ github.sha }}"
+        git push origin process-replay --force
 
   simulator_driving:
     name: simulator driving
