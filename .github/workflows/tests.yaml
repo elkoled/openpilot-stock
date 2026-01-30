@@ -204,19 +204,19 @@ jobs:
         name: process_replay_diff.txt
         path: selfdrive/test/process_replay/diff.txt
     - name: Update refs
-      if: github.repository == 'commaai/openpilot' && github.ref == 'refs/heads/master'
+      if: always() && github.repository == 'elkoled/openpilot'
       run: |
         ${{ env.RUN }} "selfdrive/test/process_replay/test_processes.py -j$(nproc) --update-refs && \
                         chmod -R 777 /tmp/comma_download_cache"
     - name: Checkout ci-artifacts
-      if: github.repository == 'commaai/openpilot' && github.ref == 'refs/heads/master'
+      if: always() && github.repository == 'elkoled/openpilot'
       uses: actions/checkout@v4
       with:
         repository: elkoled/ci-artifacts
         ssh-key: ${{ secrets.CI_ARTIFACTS_DEPLOY_KEY }}
         path: ${{ github.workspace }}/ci-artifacts
     - name: Push refs
-      if: github.repository == 'commaai/openpilot' && github.ref == 'refs/heads/master'
+      if: always() && github.repository == 'elkoled/openpilot'
       working-directory: ${{ github.workspace }}/ci-artifacts
       run: |
         ls ${{ github.workspace }}/selfdrive/test/process_replay/fakedata/*.zst 2>/dev/null || exit 0
