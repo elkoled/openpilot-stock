@@ -212,7 +212,7 @@ jobs:
       if: github.repository == 'commaai/openpilot' && github.ref == 'refs/heads/master'
       uses: actions/checkout@v4
       with:
-        repository: commaai/ci-artifacts
+        repository: elkoled/ci-artifacts
         ssh-key: ${{ secrets.CI_ARTIFACTS_DEPLOY_KEY }}
         path: ${{ github.workspace }}/ci-artifacts
     - name: Push refs
@@ -222,12 +222,12 @@ jobs:
         ls ${{ github.workspace }}/selfdrive/test/process_replay/fakedata/*.zst 2>/dev/null || exit 0
         git config user.name "GitHub Actions Bot"
         git config user.email "<>"
-        git fetch origin process_replay || true
-        git checkout process_replay 2>/dev/null || git checkout --orphan process_replay
+        git fetch origin process-replay || true
+        git checkout process-replay 2>/dev/null || git checkout --orphan process-replay
         cp ${{ github.workspace }}/selfdrive/test/process_replay/fakedata/*.zst .
         git add *.zst
-        git commit -m "process_replay refs for ${{ github.sha }}" || echo "No changes to commit"
-        git push origin process_replay
+        git commit -m "process-replay refs for ${{ github.sha }}" || echo "No changes to commit"
+        git push origin process-replay
 
   simulator_driving:
     name: simulator driving
