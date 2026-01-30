@@ -184,7 +184,7 @@ jobs:
       uses: actions/cache@v4
       with:
         path: .ci_cache/comma_download_cache
-        key: proc-replay-${{ hashFiles('selfdrive/test/process_replay/ref_commit', 'selfdrive/test/process_replay/test_processes.py') }}
+        key: proc-replay-${{ hashFiles('selfdrive/test/process_replay/test_processes.py') }}
     - name: Build openpilot
       run: |
         ${{ env.RUN }} "scons -j$(nproc)"
@@ -203,10 +203,15 @@ jobs:
       with:
         name: process_replay_diff.txt
         path: selfdrive/test/process_replay/diff.txt
-    - name: Update refs
+    - name: Upload reference logs
       if: always() && github.repository == 'elkoled/openpilot-stock'
       run: |
-        ${{ env.RUN }} "selfdrive/test/process_replay/test_processes.py -j$(nproc) --update-refs && \
+        ${{ env.RUN }} "selfdrive/test/process_replay/test_processes.py -j$(nproc) --update-refs"
+    - name: Run regen
+      if: false
+      timeout-minutes: 4
+      run: |
+        ${{ env.RUN }} "ONNXCPU=1 $PYTEST selfdrive/test/process_replay/test_regen.py && \
                         chmod -R 777 /tmp/comma_download_cache"
     - name: Checkout ci-artifacts
       if: always() && github.repository == 'elkoled/openpilot-stock'
@@ -224,17 +229,10 @@ jobs:
         git config user.name "GitHub Actions Bot"
         git config user.email "<>"
         cp ${{ github.workspace }}/selfdrive/test/process_replay/fakedata/*.zst .
+        echo "${{ github.sha }}" > ref_commit
         git add .
         git commit -m "process-replay refs for ${{ github.sha }}"
         git push origin process-replay --force
-    - name: Update ref_commit
-      if: always() && github.repository == 'elkoled/openpilot-stock'
-      run: |
-        git config user.name "GitHub Actions Bot"
-        git config user.email "<>"
-        git add selfdrive/test/process_replay/ref_commit
-        git commit -m "update process replay ref_commit" || echo "No changes to commit"
-        git push origin HEAD:master
 
   simulator_driving:
     name: simulator driving

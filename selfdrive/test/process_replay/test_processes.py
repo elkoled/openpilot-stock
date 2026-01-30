@@ -65,7 +65,6 @@ segments = [
 excluded_interfaces = ["mock", "body", "psa"]
 
 BASE_URL = "https://raw.githubusercontent.com/elkoled/ci-artifacts/refs/heads/process-replay/"
-REF_COMMIT_FN = os.path.join(PROC_REPLAY_DIR, "ref_commit")
 EXCLUDED_PROCS = {"modeld", "dmonitoringmodeld"}
 
 
@@ -157,11 +156,9 @@ if __name__ == "__main__":
     assert full_test, "Need to run full test when updating refs"
 
   try:
-    with open(REF_COMMIT_FN) as f:
-      ref_commit = f.read().strip()
-  except FileNotFoundError:
-    print("Couldn't find reference commit")
-    sys.exit(1)
+    ref_commit = FileReader(BASE_URL + "ref_commit").read().decode().strip()
+  except Exception:
+    ref_commit = ""
 
   cur_commit = get_commit()
   if not cur_commit:
@@ -229,8 +226,6 @@ if __name__ == "__main__":
       print("TEST SUCCEEDED")
 
   else:
-    with open(REF_COMMIT_FN, "w") as f:
-      f.write(cur_commit)
     print(f"\n\nUpdated reference logs for commit: {cur_commit}")
 
   sys.exit(int(failed))
