@@ -20,7 +20,6 @@ concurrency:
 env:
   PYTHONWARNINGS: error
   BASE_IMAGE: openpilot-base
-  AZURE_TOKEN: ${{ secrets.AZURE_COMMADATACI_OPENPILOTCI_TOKEN }}
 
   DOCKER_LOGIN: docker login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
   BUILD: selfdrive/test/docker_build.sh base
@@ -204,16 +203,31 @@ jobs:
       with:
         name: process_replay_diff.txt
         path: selfdrive/test/process_replay/diff.txt
-    - name: Upload reference logs
-      if: false # TODO: move this to github instead of azure
+    - name: Update refs
+      if: github.repository == 'commaai/openpilot' && github.ref == 'refs/heads/master'
       run: |
-        ${{ env.RUN }} "unset PYTHONWARNINGS && AZURE_TOKEN='$AZURE_TOKEN' python3 selfdrive/test/process_replay/test_processes.py -j$(nproc) --upload-only"
-    - name: Run regen
-      if: false
-      timeout-minutes: 4
-      run: |
-        ${{ env.RUN }} "ONNXCPU=1 $PYTEST selfdrive/test/process_replay/test_regen.py && \
+        ${{ env.RUN }} "selfdrive/test/process_replay/test_processes.py -j$(nproc) --update-refs && \
                         chmod -R 777 /tmp/comma_download_cache"
+    - name: Checkout ci-artifacts
+      if: github.repository == 'commaai/openpilot' && github.ref == 'refs/heads/master'
+      uses: actions/checkout@v4
+      with:
+        repository: commaai/ci-artifacts
+        ssh-key: ${{ secrets.CI_ARTIFACTS_DEPLOY_KEY }}
+        path: ${{ github.workspace }}/ci-artifacts
+    - name: Push refs
+      if: github.repository == 'commaai/openpilot' && github.ref == 'refs/heads/master'
+      working-directory: ${{ github.workspace }}/ci-artifacts
+      run: |
+        ls ${{ github.workspace }}/selfdrive/test/process_replay/fakedata/*.zst 2>/dev/null || exit 0
+        git config user.name "GitHub Actions Bot"
+        git config user.email "<>"
+        git fetch origin process_replay || true
+        git checkout process_replay 2>/dev/null || git checkout --orphan process_replay
+        cp ${{ github.workspace }}/selfdrive/test/process_replay/fakedata/*.zst .
+        git add *.zst
+        git commit -m "process_replay refs for ${{ github.sha }}" || echo "No changes to commit"
+        git push origin process_replay
 
   simulator_driving:
     name: simulator driving

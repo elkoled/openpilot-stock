@@ -9,7 +9,7 @@ from typing import Any
 
 from opendbc.car.car_helpers import interface_names
 from openpilot.common.git import get_commit
-from openpilot.tools.lib.openpilotci import get_url, upload_file
+from openpilot.tools.lib.openpilotci import get_url
 from openpilot.selfdrive.test.process_replay.compare_logs import compare_logs, format_diff
 from openpilot.selfdrive.test.process_replay.process_replay import CONFIGS, PROC_REPLAY_DIR, FAKEDATA, replay_process, \
                                                                    check_most_messages_valid
@@ -64,7 +64,7 @@ segments = [
 # dashcamOnly makes don't need to be tested until a full port is done
 excluded_interfaces = ["mock", "body", "psa"]
 
-BASE_URL = "https://commadataci.blob.core.windows.net/openpilotci/"
+BASE_URL = "https://raw.githubusercontent.com/commaai/ci-artifacts/refs/heads/process-replay/"
 REF_COMMIT_FN = os.path.join(PROC_REPLAY_DIR, "ref_commit")
 EXCLUDED_PROCS = {"modeld", "dmonitoringmodeld"}
 
@@ -79,10 +79,7 @@ def run_test_process(data):
     save_log(cur_log_fn, log_msgs)
 
   if args.update_refs or args.upload_only:
-    print(f'Uploading: {os.path.basename(cur_log_fn)}')
     assert os.path.exists(cur_log_fn), f"Cannot find log to upload: {cur_log_fn}"
-    upload_file(cur_log_fn, os.path.basename(cur_log_fn))
-    os.remove(cur_log_fn)
   return (segment, cfg.proc_name, res)
 
 
@@ -226,8 +223,8 @@ if __name__ == "__main__":
 
     if failed:
       print("TEST FAILED")
-      print("\n\nTo push the new reference logs for this commit run:")
-      print("./test_processes.py --upload-only")
+      print("\n\nTo update the reference logs for this commit run:")
+      print("./test_processes.py --update-refs")
     else:
       print("TEST SUCCEEDED")
 
