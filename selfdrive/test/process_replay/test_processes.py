@@ -155,10 +155,7 @@ if __name__ == "__main__":
   if upload:
     assert full_test, "Need to run full test when updating refs"
 
-  try:
-    ref_commit = FileReader(BASE_URL + "ref_commit").read().decode().strip()
-  except Exception:
-    ref_commit = ""
+  ref_commit = FileReader(BASE_URL + "ref_commit").read().decode().strip()
 
   cur_commit = get_commit()
   if not cur_commit:
