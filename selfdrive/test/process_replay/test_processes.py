@@ -9,12 +9,13 @@ from typing import Any
 
 from opendbc.car.car_helpers import interface_names
 from openpilot.common.git import get_commit
-from openpilot.tools.lib.openpilotci import get_url, upload_file
+from openpilot.tools.lib.openpilotci import get_url
 from openpilot.selfdrive.test.process_replay.compare_logs import compare_logs, format_diff
 from openpilot.selfdrive.test.process_replay.process_replay import CONFIGS, PROC_REPLAY_DIR, FAKEDATA, replay_process, \
                                                                    check_most_messages_valid
 from openpilot.tools.lib.filereader import FileReader
 from openpilot.tools.lib.logreader import LogReader, save_log
+from openpilot.tools.lib.url_file import URLFile
 
 source_segments = [
   ("HYUNDAI", "02c45f73a2e5c6e9|2021-01-01--19-08-22--1"),     # HYUNDAI.HYUNDAI_SONATA
@@ -64,7 +65,7 @@ segments = [
 # dashcamOnly makes don't need to be tested until a full port is done
 excluded_interfaces = ["mock", "body", "psa"]
 
-BASE_URL = "https://commadataci.blob.core.windows.net/openpilotci/"
+BASE_URL = "https://raw.githubusercontent.com/commaai/ci-artifacts/refs/heads/process-replay/"
 REF_COMMIT_FN = os.path.join(PROC_REPLAY_DIR, "ref_commit")
 EXCLUDED_PROCS = {"modeld", "dmonitoringmodeld"}
 
@@ -79,10 +80,7 @@ def run_test_process(data):
     save_log(cur_log_fn, log_msgs)
 
   if args.update_refs or args.upload_only:
-    print(f'Uploading: {os.path.basename(cur_log_fn)}')
     assert os.path.exists(cur_log_fn), f"Cannot find log to upload: {cur_log_fn}"
-    upload_file(cur_log_fn, os.path.basename(cur_log_fn))
-    os.remove(cur_log_fn)
   return (segment, cfg.proc_name, res)
 
 
@@ -163,8 +161,7 @@ if __name__ == "__main__":
     with open(REF_COMMIT_FN) as f:
       ref_commit = f.read().strip()
   except FileNotFoundError:
-    print("Couldn't find reference commit")
-    sys.exit(1)
+    ref_commit = URLFile(BASE_URL + "ref_commit", cache=False).read().decode().strip()
 
   cur_commit = get_commit()
   if not cur_commit:
@@ -199,11 +196,11 @@ if __name__ == "__main__":
         if cfg.proc_name not in ('card', 'controlsd', 'lagd') and car_brand not in ('HYUNDAI', 'TOYOTA'):
           continue
 
-        cur_log_fn = os.path.join(FAKEDATA, f"{segment}_{cfg.proc_name}_{cur_commit}.zst")
+        cur_log_fn = os.path.join(FAKEDATA, f"{segment}_{cfg.proc_name}_{cur_commit}.zst".replace("|", "_"))
         if args.update_refs:  # reference logs will not exist if routes were just regenerated
           ref_log_path = get_url(*segment.rsplit("--", 1,), "rlog.zst")
         else:
-          ref_log_fn = os.path.join(FAKEDATA, f"{segment}_{cfg.proc_name}_{ref_commit}.zst")
+          ref_log_fn = os.path.join(FAKEDATA, f"{segment}_{cfg.proc_name}_{ref_commit}.zst".replace("|", "_"))
           ref_log_path = ref_log_fn if os.path.exists(ref_log_fn) else BASE_URL + os.path.basename(ref_log_fn)
 
         dat = None if args.upload_only else log_data[segment]
