@@ -8,7 +8,7 @@ from tqdm import tqdm
 from typing import Any
 
 from openpilot.selfdrive.test.process_replay.compare_logs import compare_logs, format_process_diff
-from openpilot.selfdrive.test.process_replay.process_replay import PROC_REPLAY_DIR, FAKEDATA, replay_process, \
+from openpilot.selfdrive.test.process_replay.process_replay import FAKEDATA, replay_process, \
                                                                    get_process_config, check_most_messages_valid
 from openpilot.selfdrive.test.process_replay.test_processes import segments, REF_COMMIT_FN
 from openpilot.tools.lib.filereader import FileReader
@@ -37,7 +37,7 @@ def test_process(cfg, lr, segment, ref_log_path):
     raise Exception("failed on segment: " + segment) from e
 
   if not check_most_messages_valid(log_msgs):
-    return f"Route did not have enough valid messages"
+    return "Route did not have enough valid messages"
 
   seen_msgs = {m.which() for m in log_msgs}
   expected_msgs = set(cfg.subs)
