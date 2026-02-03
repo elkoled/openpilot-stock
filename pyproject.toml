@@ -105,8 +105,6 @@ testing = [
 
 dev = [
   "av",
-  "azure-identity",
-  "azure-storage-blob",
   "dictdiffer",
   "jeepney",
   "matplotlib",
