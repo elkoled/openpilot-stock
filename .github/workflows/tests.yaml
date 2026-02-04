@@ -210,7 +210,7 @@ jobs:
         path: selfdrive/test/process_replay/diff.txt
     - name: Upload card diff
       if: always() && github.event_name == 'pull_request'
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       continue-on-error: true
       with:
         name: card_diff_${{ github.event.number }}
@@ -227,7 +227,7 @@ jobs:
                         chmod -R 777 /tmp/comma_download_cache"
     - name: Checkout ci-artifacts
       if: github.repository == 'commaai/openpilot' && github.ref == 'refs/heads/master'
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         repository: commaai/ci-artifacts
         ssh-key: ${{ secrets.CI_ARTIFACTS_DEPLOY_KEY }}
