@@ -214,14 +214,14 @@ jobs:
         name: diff_report_${{ github.event.number }}
         path: selfdrive/test/process_replay/diff_report.txt
     - name: Checkout ci-artifacts
-      if: github.repository == 'commaai/openpilot' && github.ref == 'refs/heads/master'
+      if: github.repository == 'elkoled/openpilot-stock' && github.ref == 'refs/heads/master'
       uses: actions/checkout@v4
       with:
-        repository: commaai/ci-artifacts
+        repository: elkoled/ci-artifacts
         ssh-key: ${{ secrets.CI_ARTIFACTS_DEPLOY_KEY }}
         path: ${{ github.workspace }}/ci-artifacts
     - name: Push refs
-      if: github.repository == 'commaai/openpilot' && github.ref == 'refs/heads/master'
+      if: github.repository == 'elkoled/openpilot-stock' && github.ref == 'refs/heads/master'
       working-directory: ${{ github.workspace }}/ci-artifacts
       run: |
         git checkout --orphan process-replay
