@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import concurrent.futures
 import os
 import sys
 import traceback
@@ -7,34 +6,54 @@ from collections import defaultdict
 from tqdm import tqdm
 from typing import Any
 
-from openpilot.selfdrive.test.process_replay.compare_logs import compare_logs, format_process_diff
-from openpilot.selfdrive.test.process_replay.process_replay import FAKEDATA, replay_process, \
-                                                                   get_process_config, check_most_messages_valid
-from openpilot.selfdrive.test.process_replay.test_processes import segments, REF_COMMIT_FN
-from openpilot.tools.lib.filereader import FileReader
+from opendbc.car.tests.car_diff import format_diff
+from openpilot.common.git import get_commit
+from openpilot.selfdrive.test.process_replay.compare_logs import compare_logs
+from openpilot.selfdrive.test.process_replay.process_replay import FAKEDATA, get_process_config, replay_process
+from openpilot.selfdrive.test.process_replay.test_processes import segments, get_log_data, BASE_URL, REF_COMMIT_FN
 from openpilot.tools.lib.logreader import LogReader
 from openpilot.tools.lib.openpilotci import get_url
 from openpilot.tools.lib.url_file import URLFile
 
 BASE_URL = "https://raw.githubusercontent.com/commaai/ci-artifacts/refs/heads/process-replay/"
 CARD_CFG = get_process_config("card")
+NAN_FIELDS = {'aRel', 'yvRel'}
 
 
-# copied from test_processes.py
+class MsgWrap:
+  """Adapter so to_dict() includes defaults"""
+  def __init__(self, msg):
+    self._msg = msg
+  def to_dict(self):
+    return self._msg.to_dict(verbose=True)
 
-def get_log_data(segment):
-  r, n = segment.rsplit("--", 1)
-  with FileReader(get_url(r, n, "rlog.zst")) as f:
-    return (segment, f.read())
+
+def compare_card(ref_msgs, new_msgs):
+  ref, new = defaultdict(list), defaultdict(list)
+  for m in ref_msgs:
+    if m.which() in CARD_CFG.subs:
+      ref[m.which()].append(m)
+  for m in new_msgs:
+    if m.which() in CARD_CFG.subs:
+      new[m.which()].append(m)
+
+  diffs = []
+  for sub in CARD_CFG.subs:
+    for i, (r, n) in enumerate(zip(ref[sub], new[sub], strict=True)):
+      for d in compare_logs([r], [n], CARD_CFG.ignore, tolerance=CARD_CFG.tolerance):
+        if d[0] == "change":
+          path = ".".join(str(p) for p in d[1]) if isinstance(d[1], list) else d[1]
+          if path.split('.')[-1] in NAN_FIELDS:
+            continue
+          diffs.append((path, i, d[2], r.logMonoTime))
+  return diffs, ref, new
 
 
-def test_process(cfg, lr, segment, ref_log_path):
-  ref_log_msgs = list(LogReader(ref_log_path))
-
-  try:
-    log_msgs = replay_process(cfg, lr, disable_progress=True)
-  except Exception as e:
-    raise Exception("failed on segment: " + segment) from e
+def format_card(diffs, ref, new, field):
+  msg_type = field.split(".")[0]
+  ref = [(m.logMonoTime, MsgWrap(m)) for m in ref.get(msg_type, [])]
+  states = [MsgWrap(m) for m in new.get(msg_type, [])]
+  return format_diff(diffs, ref, states, field)
 
   if not check_most_messages_valid(log_msgs):
     return "Route did not have enough valid messages"
@@ -71,51 +90,55 @@ def main() -> int:
   except FileNotFoundError:
     ref_commit = URLFile(BASE_URL + "ref_commit", cache=False).read().decode().strip()
 
-  print("## Process replay report")
-  print("Replays driving segments through card and compares the output to master.")
+  cur_commit = get_commit()
+  if not cur_commit:
+    raise Exception("Couldn't get current commit")
+
+  print("## Card behavior report")
+  print("Replays driving segments through this PR and compares the behavior to master.")
   print("Please review any changes carefully to ensure they are expected.\n")
 
-  # download segment logs (same as test_processes.py)
-  download_segments = [seg for _, seg in segments]
-  log_data: dict[str, bytes] = {}
-  with concurrent.futures.ProcessPoolExecutor(max_workers=jobs) as pool:
-    for segment, lr_dat in tqdm(pool.map(get_log_data, download_segments), desc="Getting Logs", total=len(download_segments)):
-      log_data[segment] = lr_dat
+  results = []
+  for plat, seg in segments:
+    cur_log_fn = os.path.join(FAKEDATA, f"{seg}_{CARD_CFG.proc_name}_{cur_commit}.zst".replace("|", "_"))
+    ref_fn = os.path.join(FAKEDATA, f"{seg}_{CARD_CFG.proc_name}_{ref_commit}.zst".replace("|", "_"))
+    ref_path = ref_fn if os.path.exists(ref_fn) else BASE_URL + os.path.basename(ref_fn)
+    try:
+      if os.path.exists(cur_log_fn):
+        new_msgs = list(LogReader(cur_log_fn))
+      else:
+        _, lr_dat = get_log_data(seg)
+        new_msgs = replay_process(CARD_CFG, LogReader.from_bytes(lr_dat), disable_progress=True)
+      diffs, ref, new = compare_card(list(LogReader(ref_path)), new_msgs)
+      if diffs:
+        results.append((plat, seg, (diffs, ref, new), None))
+      else:
+        results.append((plat, seg, None, None))
+    except Exception as e:
+      results.append((plat, seg, None, str(e)))
 
-  # build work items — card only, all segments (same as test_processes.py)
-  pool_args: Any = []
-  for car_brand, segment in segments:
-    ref_log_fn = os.path.join(FAKEDATA, f"{segment}_card_{ref_commit}.zst".replace("|", "_"))
-    ref_log_path = ref_log_fn if os.path.exists(ref_log_fn) else BASE_URL + os.path.basename(ref_log_fn)
-    pool_args.append((segment, car_brand, CARD_CFG, ref_log_path, log_data[segment]))
-
-  # run replays (same as test_processes.py)
-  results: defaultdict[str, dict] = defaultdict(dict)
-  with concurrent.futures.ProcessPoolExecutor(max_workers=jobs) as pool:
-    for car_brand, segment, result in tqdm(pool.map(run_test_process, pool_args), desc="Running Tests", total=len(pool_args)):
-      results[car_brand][segment] = result
-
-  # format output (same pattern as opendbc car_diff.py main())
-  with_diffs = [(car, seg, diff) for car, segs in results.items() for seg, diff in segs.items()
-                if isinstance(diff, str) or (diff is not None and len(diff) > 0)]
-  errors = [(car, seg, diff) for car, seg, diff in with_diffs if isinstance(diff, str)]
-  n_passed = sum(1 for car, segs in results.items() for seg, diff in segs.items()
-                 if not isinstance(diff, str) and (diff is None or len(diff) == 0))
+  with_diffs = [(plat, seg, res) for plat, seg, res, err in results if res]
+  errors = [(plat, seg, err) for plat, seg, _, err in results if err]
+  n_passed = len(results) - len(with_diffs) - len(errors)
 
   icon = "⚠️" if with_diffs else "✅"
   print(f"{icon}  {len(with_diffs) - len(errors)} changed, {n_passed} passed, {len(errors)} errors")
   print(f"_ref: `{ref_commit[:12]}`_")
 
-  for car, seg, err in errors:
-    print(f"\nERROR {car} - {seg}:\n{err}")
+  for plat, seg, err in errors:
+    print(f"\nERROR {plat} - {seg}: {err}")
 
-  diffs_only = [(car, seg, diff) for car, seg, diff in with_diffs if not isinstance(diff, str)]
-  if diffs_only:
-    print("\n<details><summary><b>Show changes</b></summary>\n\n```")
-    for car, seg, diff in diffs_only:
-      print(f"\n{car} - {seg}")
-      diff_short, _ = format_process_diff(diff)
-      print(diff_short)
+  if with_diffs:
+    print("<details><summary><b>Show changes</b></summary>\n\n```")
+    for plat, seg, (diffs, ref, new) in with_diffs:
+      print(f"\n{plat} - {seg}")
+      by_field = defaultdict(list)
+      for d in diffs:
+        by_field[d[0]].append(d)
+      for field, fd in sorted(by_field.items()):
+        print(f"\n  {field} ({len(fd)} diffs)")
+        for line in format_card(fd, ref, new, field):
+          print(line)
     print("```\n</details>")
 
   return 1 if errors else 0
