@@ -231,6 +231,10 @@ def startup_master_alert(CP: car.CarParams, CS: car.CarState, sm: messaging.SubM
 
   return StartupAlert("WARNING: This branch is not tested", branch, alert_status=AlertStatus.userPrompt)
 
+def dashcam_alert(CP: car.CarParams, CS: car.CarState, sm: messaging.SubMaster, metric: bool, soft_disable_time: int, personality) -> Alert:
+  return NormalPermanentAlert("Dashcam Mode", CP.dashcamReason,
+                              priority=Priority.LOWEST)
+
 def below_engage_speed_alert(CP: car.CarParams, CS: car.CarState, sm: messaging.SubMaster, metric: bool, soft_disable_time: int, personality) -> Alert:
   return NoEntryAlert(f"Drive above {get_display_speed(CP.minEnableSpeed, metric)} to engage")
 
@@ -417,8 +421,7 @@ EVENTS: dict[int, dict[str, Alert | AlertCallbackType]] = {
   },
 
   EventName.dashcamMode: {
-    ET.PERMANENT: NormalPermanentAlert("Dashcam Mode",
-                                       priority=Priority.LOWEST),
+    ET.PERMANENT: dashcam_alert,
   },
 
   EventName.invalidLkasSetting: {
