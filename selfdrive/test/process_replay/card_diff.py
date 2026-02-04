@@ -1,18 +1,14 @@
 #!/usr/bin/env python3
 import os
 import sys
-import traceback
 from collections import defaultdict
-from tqdm import tqdm
-from typing import Any
 
 from opendbc.car.tests.car_diff import format_diff
 from openpilot.common.git import get_commit
 from openpilot.selfdrive.test.process_replay.compare_logs import compare_logs
 from openpilot.selfdrive.test.process_replay.process_replay import FAKEDATA, get_process_config, replay_process
-from openpilot.selfdrive.test.process_replay.test_processes import segments, get_log_data, BASE_URL, REF_COMMIT_FN
+from openpilot.selfdrive.test.process_replay.test_processes import segments, get_log_data, REF_COMMIT_FN
 from openpilot.tools.lib.logreader import LogReader
-from openpilot.tools.lib.openpilotci import get_url
 from openpilot.tools.lib.url_file import URLFile
 
 BASE_URL = "https://raw.githubusercontent.com/commaai/ci-artifacts/refs/heads/process-replay/"
@@ -55,35 +51,8 @@ def format_card(diffs, ref, new, field):
   states = [MsgWrap(m) for m in new.get(msg_type, [])]
   return format_diff(diffs, ref, states, field)
 
-  if not check_most_messages_valid(log_msgs):
-    return "Route did not have enough valid messages"
-
-  seen_msgs = {m.which() for m in log_msgs}
-  expected_msgs = set(cfg.subs)
-  if seen_msgs != expected_msgs:
-    return f"Expected messages: {expected_msgs}, but got: {seen_msgs}"
-
-  try:
-    return compare_logs(ref_log_msgs, log_msgs, cfg.ignore, [], cfg.tolerance)
-  except Exception as e:
-    return str(e)
-
-
-def run_test_process(data):
-  segment, car_brand, cfg, ref_log_path, lr_dat = data
-  try:
-    lr = LogReader.from_bytes(lr_dat)
-    res = test_process(cfg, lr, segment, ref_log_path)
-    return (car_brand, segment, res)
-  except Exception:
-    return (car_brand, segment, traceback.format_exc())
-
-
-# -- copied from opendbc car_diff.py main() --
 
 def main() -> int:
-  jobs = max((os.cpu_count() or 2) - 2, 1)
-
   try:
     with open(REF_COMMIT_FN) as f:
       ref_commit = f.read().strip()
