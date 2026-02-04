@@ -1,4 +1,4 @@
-name: car diff
+name: card diff
 
 on:
   pull_request_target:
@@ -40,6 +40,6 @@ jobs:
       uses: thollander/actions-comment-pull-request@v2
       with:
         filePath: card_diff.txt
-        comment_tag: car_diff
+        comment_tag: card_diff
         pr_number: ${{ github.event.number }}
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
