@@ -92,7 +92,6 @@ def main() -> int:
 
   icon = "⚠️" if with_diffs else "✅"
   print(f"{icon}  {len(with_diffs) - len(errors)} changed, {n_passed} passed, {len(errors)} errors")
-  print(f"_ref: `{ref_commit[:12]}`_")
 
   for plat, seg, err in errors:
     print(f"\nERROR {plat} - {seg}: {err}")
