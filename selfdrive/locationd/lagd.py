@@ -16,10 +16,10 @@ from openpilot.selfdrive.locationd.helpers import PoseCalibrator, Pose, fft_next
 BLOCK_SIZE = 100
 BLOCK_NUM = 50
 BLOCK_NUM_NEEDED = 5
-MOVING_WINDOW_SEC = 60.0
-MIN_OKAY_WINDOW_SEC = 25.0
+MOVING_WINDOW_SEC = 6.0
+MIN_OKAY_WINDOW_SEC = 2.0
 MIN_RECOVERY_BUFFER_SEC = 2.0
-MIN_VEGO = 15.0
+MIN_VEGO = 1.0
 MIN_ABS_YAW_RATE = 0.0
 MAX_YAW_RATE_SANITY_CHECK = 1.0
 MIN_NCC = 0.95
@@ -29,7 +29,7 @@ MAX_LAT_ACCEL = 2.0
 MAX_LAT_ACCEL_DIFF = 0.6
 MIN_CONFIDENCE = 0.7
 CORR_BORDER_OFFSET = 5
-LAG_CANDIDATE_CORR_THRESHOLD = 0.9
+LAG_CANDIDATE_CORR_THRESHOLD = 0.4
 
 
 def masked_normalized_cross_correlation(expected_sig: np.ndarray, actual_sig: np.ndarray, mask: np.ndarray, n: int):

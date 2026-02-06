@@ -18,13 +18,13 @@ from openpilot.selfdrive.locationd.models.constants import ObservationKind, GENE
 
 ACCEL_SANITY_CHECK = 100.0  # m/s^2
 ROTATION_SANITY_CHECK = 10.0  # rad/s
-TRANS_SANITY_CHECK = 200.0  # m/s
+TRANS_SANITY_CHECK = 20.0  # m/s
 CALIB_RPY_SANITY_CHECK = 0.5  # rad (+- 30 deg)
 MIN_STD_SANITY_CHECK = 1e-5  # m or rad
-MAX_FILTER_REWIND_TIME = 0.8  # s
-MAX_SENSOR_TIME_DIFF = 0.1  # s
-YAWRATE_CROSS_ERR_CHECK_FACTOR = 30
-INPUT_INVALID_LIMIT = 2.0 # 1 (camodo) / 9 (sensor) bad input[s] ignored
+MAX_FILTER_REWIND_TIME = 0.1  # s
+MAX_SENSOR_TIME_DIFF = 0.05  # s
+YAWRATE_CROSS_ERR_CHECK_FACTOR = 10
+INPUT_INVALID_LIMIT = 1.0 # 1 (camodo) / 9 (sensor) bad input[s] ignored
 INPUT_INVALID_RECOVERY = 10.0 # ~10 secs to resume after exceeding allowed bad inputs by one
 POSENET_STD_INITIAL_VALUE = 10.0
 POSENET_STD_HIST_HALF = 20
