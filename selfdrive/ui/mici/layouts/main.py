@@ -49,6 +49,7 @@ class MiciMainLayout(Widget):
       self._onroad_layout,
     ], spacing=0, pad_start=0, pad_end=0)
     self._scroller.set_reset_scroll_at_show(False)
+    self._scroller.set_enabled(lambda: self.enabled)
 
     # Disable scrolling when onroad is interacting with bookmark
     self._scroller.set_scrolling_enabled(lambda: not self._onroad_layout.is_swiping_left())
@@ -68,7 +69,6 @@ class MiciMainLayout(Widget):
 
   def _setup_callbacks(self):
     self._home_layout.set_callbacks(on_settings=self._on_settings_clicked)
-    self._settings_layout.set_callbacks(on_close=self._on_settings_closed)
     self._onroad_layout.set_click_callback(lambda: self._scroll_to(self._home_layout))
     device.add_interactive_timeout_callback(self._set_mode_for_started)
 
@@ -138,10 +138,10 @@ class MiciMainLayout(Widget):
         self._scroll_to(self._home_layout)
 
   def _on_settings_clicked(self):
-    self._set_mode(MainState.SETTINGS)
-
-  def _on_settings_closed(self):
-    self._set_mode(MainState.MAIN)
+    # print('on settings clicked')
+    gui_app.push_widget(self._settings_layout)
+    # gui_app.set_modal_overlay(self._settings_layout)
+    # self._set_mode(MainState.SETTINGS)
 
   def _on_bookmark_clicked(self):
     user_bookmark = messaging.new_message('bookmarkButton')
