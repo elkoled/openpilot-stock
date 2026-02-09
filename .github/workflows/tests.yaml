@@ -191,8 +191,7 @@ jobs:
       timeout-minutes: ${{ contains(runner.name, 'nsc') && (steps.dependency-cache.outputs.cache-hit == 'true') && ((steps.setup-step.outputs.duration < 18) && 1 || 2) || 20 }}
       continue-on-error: ${{ github.ref == 'refs/heads/master' }}
       run: |
-        ${{ env.RUN }} "selfdrive/test/process_replay/test_processes.py -j$(nproc) \
-                        ${{ github.ref == 'refs/heads/master' && '--update-refs' || '' }} && \
+        ${{ env.RUN }} "selfdrive/test/process_replay/test_processes.py -j$(nproc) && \
                         chmod -R 777 /tmp/comma_download_cache"
     - name: Print diff
       id: print-diff
@@ -214,14 +213,14 @@ jobs:
         name: diff_report_${{ github.event.number }}
         path: selfdrive/test/process_replay/diff_report.txt
     - name: Checkout ci-artifacts
-      if: always() && github.repository == 'elkoled/openpilot-stock' && github.ref == 'refs/heads/master'
+      if: github.repository == 'elkoled/openpilot-stock' && github.ref == 'refs/heads/master'
       uses: actions/checkout@v4
       with:
         repository: elkoled/ci-artifacts
         ssh-key: ${{ secrets.CI_ARTIFACTS_DEPLOY_KEY }}
         path: ${{ github.workspace }}/ci-artifacts
     - name: Push refs
-      if: always() && github.repository == 'elkoled/openpilot-stock' && github.ref == 'refs/heads/master'
+      if: github.repository == 'elkoled/openpilot-stock' && github.ref == 'refs/heads/master'
       working-directory: ${{ github.workspace }}/ci-artifacts
       run: |
         git checkout --orphan process-replay
