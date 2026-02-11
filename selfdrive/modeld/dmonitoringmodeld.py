@@ -29,7 +29,7 @@ class ModelState:
   inputs: dict[str, np.ndarray]
   output: np.ndarray
 
-  def __init__(self, cl_ctx):
+  def __init__(self):
     with open(METADATA_PATH, 'rb') as f:
       model_metadata = pickle.load(f)
       self.input_shapes = model_metadata['input_shapes']
@@ -52,7 +52,7 @@ class ModelState:
 
     t1 = time.perf_counter()
 
-    if self.frame_buf_params is None:
+    if self.image_warp is None:
       self.frame_buf_params = get_nv12_info(buf.width, buf.height)
       warp_path = MODELS_DIR / f'dm_warp_{buf.width}x{buf.height}_tinygrad.pkl'
       with open(warp_path, "rb") as f:
@@ -62,7 +62,7 @@ class ModelState:
     self.warp_inputs_np['transform'][:] = transform[:]
     self.tensor_inputs['input_img'] = self.image_warp(self.warp_inputs['frame'], self.warp_inputs['transform']).realize()
 
-    output = self.model_run(**self.tensor_inputs).contiguous().realize().uop.base.buffer.numpy()
+    output = self.model_run(**self.tensor_inputs).numpy().flatten()
 
     t2 = time.perf_counter()
     return output, t2 - t1
@@ -110,12 +110,11 @@ def get_driverstate_packet(model_output, frame_id: int, location_ts: int, exec_t
 def main():
   config_realtime_process(7, 5)
 
-  cl_context = CLContext()
-  model = ModelState(cl_context)
+  model = ModelState()
   cloudlog.warning("models loaded, dmonitoringmodeld starting")
 
   cloudlog.warning("connecting to driver stream")
-  vipc_client = VisionIpcClient("camerad", VisionStreamType.VISION_STREAM_DRIVER, True, cl_context)
+  vipc_client = VisionIpcClient("camerad", VisionStreamType.VISION_STREAM_DRIVER, True)
   while not vipc_client.connect(False):
     time.sleep(0.1)
   assert vipc_client.is_connected()

@@ -143,7 +143,7 @@ class ModelState:
   output: np.ndarray
   prev_desire: np.ndarray  # for tracking the rising edge of the pulse
 
-  def __init__(self, context: CLContext):
+  def __init__(self):
     with open(VISION_METADATA_PATH, 'rb') as f:
       vision_metadata = pickle.load(f)
       self.vision_input_shapes =  vision_metadata['input_shapes']
@@ -166,7 +166,6 @@ class ModelState:
       self.full_input_queues.update_dtypes_and_shapes({k: self.numpy_inputs[k].dtype}, {k: self.numpy_inputs[k].shape})
     self.full_input_queues.reset()
 
-    # img buffers are managed in openCL transform code
     self.img_queues = {'img': Tensor.zeros(IMG_QUEUE_SHAPE, dtype='uint8').contiguous().realize(),
                            'big_img': Tensor.zeros(IMG_QUEUE_SHAPE, dtype='uint8').contiguous().realize(),}
     self.full_frames : dict[str, Tensor] = {}
@@ -176,7 +175,6 @@ class ModelState:
     self.policy_inputs = {k: Tensor(v, device='NPY').realize() for k,v in self.numpy_inputs.items()}
     self.policy_output = np.zeros(policy_output_size, dtype=np.float32)
     self.parser = Parser()
-    self.frame_init = False
     self.frame_buf_params : dict[str, tuple[int, int, int, int]] = {}
     self.update_imgs = None
 
@@ -196,14 +194,13 @@ class ModelState:
     inputs['desire_pulse'][0] = 0
     new_desire = np.where(inputs['desire_pulse'] - self.prev_desire > .99, inputs['desire_pulse'], 0)
     self.prev_desire[:] = inputs['desire_pulse']
-    if not self.frame_init:
+    if self.update_imgs is None:
       for key in bufs.keys():
         w, h = bufs[key].width, bufs[key].height
         self.frame_buf_params[key] = get_nv12_info(w, h)
       warp_path = MODELS_DIR / f'warp_{w}x{h}_tinygrad.pkl'
       with open(warp_path, "rb") as f:
         self.update_imgs = pickle.load(f)
-      self.frame_init = True
 
 
     for key in bufs.keys():
@@ -218,7 +215,7 @@ class ModelState:
     if prepare_only:
       return None
 
-    self.vision_output = self.vision_run(**vision_inputs).contiguous().realize().uop.base.buffer.numpy()
+    self.vision_output = self.vision_run(**vision_inputs).numpy().flatten()
     vision_outputs_dict = self.parser.parse_vision_outputs(self.slice_outputs(self.vision_output, self.vision_output_slices))
 
     self.full_input_queues.enqueue({'features_buffer': vision_outputs_dict['hidden_state'], 'desire_pulse': new_desire})
@@ -226,7 +223,7 @@ class ModelState:
       self.numpy_inputs[k][:] = self.full_input_queues.get(k)[k]
     self.numpy_inputs['traffic_convention'][:] = inputs['traffic_convention']
 
-    self.policy_output = self.policy_run(**self.policy_inputs).contiguous().realize().uop.base.buffer.numpy()
+    self.policy_output = self.policy_run(**self.policy_inputs).numpy().flatten()
     policy_outputs_dict = self.parser.parse_policy_outputs(self.slice_outputs(self.policy_output, self.policy_output_slices))
     combined_outputs_dict = {**vision_outputs_dict, **policy_outputs_dict}
     if SEND_RAW_PRED:
@@ -244,10 +241,8 @@ def main(demo=False):
     config_realtime_process(7, 54)
 
   st = time.monotonic()
-  cloudlog.warning("setting up CL context")
-  cl_context = CLContext()
-  cloudlog.warning("CL context ready; loading model")
-  model = ModelState(cl_context)
+  cloudlog.warning("loading model")
+  model = ModelState()
   cloudlog.warning(f"models loaded in {time.monotonic() - st:.1f}s, modeld starting")
 
   # visionipc clients
@@ -260,8 +255,8 @@ def main(demo=False):
     time.sleep(.1)
 
   vipc_client_main_stream = VisionStreamType.VISION_STREAM_WIDE_ROAD if main_wide_camera else VisionStreamType.VISION_STREAM_ROAD
-  vipc_client_main = VisionIpcClient("camerad", vipc_client_main_stream, True, cl_context)
-  vipc_client_extra = VisionIpcClient("camerad", VisionStreamType.VISION_STREAM_WIDE_ROAD, False, cl_context)
+  vipc_client_main = VisionIpcClient("camerad", vipc_client_main_stream, True)
+  vipc_client_extra = VisionIpcClient("camerad", VisionStreamType.VISION_STREAM_WIDE_ROAD, False)
   cloudlog.warning(f"vision stream set up, main_wide_camera: {main_wide_camera}, use_extra_client: {use_extra_client}")
 
   while not vipc_client_main.connect(False):
