@@ -206,7 +206,8 @@ jobs:
       with:
         name: process_replay_diff.txt
         path: selfdrive/test/process_replay/diff.txt
-    - uses: actions/upload-artifact@v6
+    - name: Upload diff report
+      uses: actions/upload-artifact@v6
       if: always() && github.event_name == 'pull_request'
       continue-on-error: true
       with:
@@ -224,7 +225,7 @@ jobs:
       working-directory: ${{ github.workspace }}/ci-artifacts
       run: |
         git checkout --orphan process-replay
-        git rm -rf *
+        git rm -rf .
         git config user.name "GitHub Actions Bot"
         git config user.email "<>"
         cp ${{ github.workspace }}/selfdrive/test/process_replay/fakedata/*.zst .
