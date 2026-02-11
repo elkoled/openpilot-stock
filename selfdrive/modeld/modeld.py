@@ -15,6 +15,7 @@ from cereal import car, log
 from pathlib import Path
 from cereal.messaging import PubMaster, SubMaster
 from msgq.visionipc import VisionIpcClient, VisionStreamType, VisionBuf
+from msgq.visionipc.visionipc_pyx import CLContext
 from opendbc.car.car_helpers import get_demo_car_params
 from openpilot.common.swaglog import cloudlog
 from openpilot.common.params import Params
