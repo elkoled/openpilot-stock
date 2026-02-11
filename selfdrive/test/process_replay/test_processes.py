@@ -3,6 +3,7 @@ import argparse
 import concurrent.futures
 import os
 import sys
+import traceback
 from collections import defaultdict
 from tqdm import tqdm
 from typing import Any
@@ -12,6 +13,7 @@ from opendbc.car.tests.car_diff import format_diff as format_car_diff
 from openpilot.common.git import get_commit
 from openpilot.tools.lib.openpilotci import get_url
 from openpilot.selfdrive.test.process_replay.compare_logs import compare_logs, format_diff
+from openpilot.selfdrive.test.process_replay.diff_report import diff_process, diff_report
 from openpilot.selfdrive.test.process_replay.process_replay import CONFIGS, PROC_REPLAY_DIR, FAKEDATA, replay_process, \
                                                                    check_most_messages_valid
 from openpilot.tools.lib.filereader import FileReader
@@ -66,7 +68,7 @@ segments = [
 # dashcamOnly makes don't need to be tested until a full port is done
 excluded_interfaces = ["mock", "body", "psa"]
 
-BASE_URL = "https://raw.githubusercontent.com/commaai/ci-artifacts/refs/heads/process-replay/"
+BASE_URL = "https://raw.githubusercontent.com/elkoled/ci-artifacts/refs/heads/process-replay/"
 REF_COMMIT_FN = os.path.join(PROC_REPLAY_DIR, "ref_commit")
 EXCLUDED_PROCS = {"modeld", "dmonitoringmodeld"}
 NAN_FIELDS = {'aRel', 'yvRel'}
@@ -159,7 +161,7 @@ def run_test_process(data):
   try:
     diff_data = diff_process(cfg, ref_log_msgs, log_msgs)
   except Exception:
-    diff_data = None
+    diff_data = traceback.format_exc()
   return (segment, cfg.proc_name, res, diff_data)
 
 
@@ -295,9 +297,9 @@ if __name__ == "__main__":
     print(diff_short)
 
     try:
-      diff_report(diffs)
-    except Exception as e:
-      print(f"failed to generate diff report: {e}")
+      diff_report(diffs, segments)
+    except Exception:
+      print(f"failed to generate diff report:\n{traceback.format_exc()}")
 
     if failed:
       print("TEST FAILED")
