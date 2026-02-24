@@ -730,7 +730,7 @@ wheels = [
 [[package]]
 name = "ncurses"
 version = "6.5"
-source = { git = "https://github.com/commaai/dependencies.git?subdirectory=ncurses&rev=add-zstd-ncurses#126273430b07418c869f765be58fb6394b51bfdf" }
+source = { git = "https://github.com/commaai/dependencies.git?subdirectory=ncurses&rev=add-zstd-ncurses#bf253a34f383a0436708573e98170897e508b0f4" }
 
 [[package]]
 name = "numpy"
@@ -1676,4 +1676,4 @@ wheels = [
 [[package]]
 name = "zstd"
 version = "1.5.6"
-source = { git = "https://github.com/commaai/dependencies.git?subdirectory=zstd&rev=add-zstd-ncurses#126273430b07418c869f765be58fb6394b51bfdf" }
+source = { git = "https://github.com/commaai/dependencies.git?subdirectory=zstd&rev=add-zstd-ncurses#bf253a34f383a0436708573e98170897e508b0f4" }
