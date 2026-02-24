@@ -458,37 +458,31 @@ class Tici(HardwareBase):
 
     modem = self.get_modem()
     try:
-      manufacturer = str(modem.Get(MM_MODEM, 'Manufacturer', dbus_interface=DBUS_PROPS, timeout=TIMEOUT))
+      modem_revision = str(modem.Get(MM_MODEM, 'Revision', dbus_interface=DBUS_PROPS, timeout=TIMEOUT))
     except Exception:
-      manufacturer = None
+      modem_revision = ""
+    finally:
+      print(f"modem revision: {modem_revision}")
 
     cmds = []
+    if modem_revision.startswith("EG25") or modem_revision.startswith("EG916"):
+      # SIM hot swap
+      cmds += [
+        'AT+QSIMDET=1,0',
+        'AT+QSIMSTAT=1',
+      ]
 
-    if self.get_device_type() in ("tizi", ):
+    if modem_revision.startswith("EG25"):
       # clear out old blue prime initial APN
       os.system('mmcli -m any --3gpp-set-initial-eps-bearer-settings="apn="')
 
+      # configure modem as data-centric
       cmds += [
-        # SIM hot swap
-        'AT+QSIMDET=1,0',
-        'AT+QSIMSTAT=1',
-
-        # configure modem as data-centric
         'AT+QNVW=5280,0,"0102000000000000"',
         'AT+QNVFW="/nv/item_files/ims/IMS_enable",00',
         'AT+QNVFW="/nv/item_files/modem/mmode/ue_usage_setting",01',
       ]
-    elif manufacturer == 'Cavli Inc.':
-      cmds += [
-        'AT^SIMSWAP=1',     # use SIM slot, instead of internal eSIM
-        'AT$QCSIMSLEEP=0',  # disable SIM sleep
-        'AT$QCSIMCFG=SimPowerSave,0',  # more sleep disable
-
-        # ethernet config
-        'AT$QCPCFG=usbNet,0',
-        'AT$QCNETDEVCTL=3,1',
-      ]
-    else:
+    elif not modem_revision.startswith("EG916"):
       # this modem gets upset with too many AT commands
       if sim_id is None or len(sim_id) == 0:
         cmds += [
