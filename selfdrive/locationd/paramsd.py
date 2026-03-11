@@ -12,16 +12,16 @@ from openpilot.selfdrive.locationd.models.constants import GENERATED_DIR
 from openpilot.selfdrive.locationd.helpers import PoseCalibrator, Pose
 from openpilot.common.swaglog import cloudlog
 
-MAX_ANGLE_OFFSET_DELTA = 20 * DT_MDL  # Max 20 deg/s
+MAX_ANGLE_OFFSET_DELTA = 2 * DT_MDL  # Max 20 deg/s
 ROLL_MAX_DELTA = np.radians(20.0) * DT_MDL  # 20deg in 1 second is well within curvature limits
 ROLL_MIN, ROLL_MAX = np.radians(-10), np.radians(10)
 ROLL_LOWERED_MAX = np.radians(8)
 ROLL_STD_MAX = np.radians(1.5)
 LATERAL_ACC_SENSOR_THRESHOLD = 4.0
-OFFSET_MAX = 10.0
-OFFSET_LOWERED_MAX = 8.0
+OFFSET_MAX = 1.0
+OFFSET_LOWERED_MAX = 2.0
 MIN_ACTIVE_SPEED = 1.0
-LOW_ACTIVE_SPEED = 10.0
+LOW_ACTIVE_SPEED = 1.0
 
 
 class VehicleParamsLearner:

@@ -13,7 +13,7 @@ from openpilot.system.ubloxd.gps import Gps
 from openpilot.system.ubloxd.glonass import Glonass
 
 
-SECS_IN_MIN = 60
+SECS_IN_MIN = 6
 SECS_IN_HR = 60 * SECS_IN_MIN
 SECS_IN_DAY = 24 * SECS_IN_HR
 SECS_IN_WEEK = 7 * SECS_IN_DAY

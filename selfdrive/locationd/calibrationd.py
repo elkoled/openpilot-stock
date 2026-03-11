@@ -24,10 +24,10 @@ MIN_SPEED_FILTER = 15 * CV.MPH_TO_MS
 MAX_VEL_ANGLE_STD = np.radians(0.25)
 MAX_YAW_RATE_FILTER = np.radians(2)  # per second
 
-MAX_HEIGHT_STD = np.exp(-3.5)
+MAX_HEIGHT_STD = np.exp(-3)
 
 # This is at model frequency, blocks needed for efficiency
-SMOOTH_CYCLES = 10
+SMOOTH_CYCLES = 15
 BLOCK_SIZE = 100
 INPUTS_NEEDED = 5   # Minimum blocks needed for valid calibration
 INPUTS_WANTED = 50   # We want a little bit more than we need for stability
